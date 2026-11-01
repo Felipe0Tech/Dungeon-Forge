@@ -1,0 +1,3576 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dungeon Forge — Estudio Procedural de Cuadernos de Mazmorras</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- PDF-Lib para generación vectorial real de PDF -->
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            forge: {
+              950: '#0d0f12',
+              900: '#13161b',
+              800: '#1c2128',
+              700: '#2a313c',
+              600: '#3b4454',
+              accent: '#f59e0b',
+              accentHover: '#d97706'
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    body {
+      background-color: #0d0f12;
+      color: #e5e7eb;
+      user-select: none;
+      overflow: hidden;
+    }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #13161b; }
+    ::-webkit-scrollbar-thumb { background: #2a313c; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #f59e0b; }
+    .canvas-checker {
+      background-color: #0f1217;
+      background-image: radial-gradient(#262c36 1px, transparent 1px);
+      background-size: 16px 16px;
+    }
+    .paper-preview {
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.75);
+    }
+  </style>
+</head>
+<body class="h-screen w-screen flex flex-col font-sans text-sm">
+
+  <!-- BARRA SUPERIOR -->
+  <header class="h-14 bg-forge-900 border-b border-forge-700 px-4 flex items-center justify-between shrink-0 z-20">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-amber-500/10 border border-amber-500/40 flex items-center justify-center text-amber-400">
+        <i data-lucide="castle" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="font-bold tracking-wider text-base text-white">DUNGEON FORGE</span>
+          <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">v1.0 PRO</span>
+        </div>
+        <div class="flex items-center gap-2 text-xs text-gray-400">
+          <input id="project-title-input" type="text" value="Criptas de Ceniza" 
+            class="bg-transparent border-b border-transparent hover:border-forge-600 focus:border-amber-500 focus:outline-none text-gray-200 font-medium px-0.5"
+            onchange="App.updateProjectTitle(this.value)" />
+          <span id="autosave-badge" class="text-[11px] text-emerald-400 flex items-center gap-1">
+            <i data-lucide="check-circle-2" class="w-3 h-3"></i> Guardado
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- NAVEGACIÓN CENTRAL -->
+    <nav class="flex items-center bg-forge-950 p-1 rounded-lg border border-forge-700 gap-1">
+      <button onclick="App.setTab('dashboard')" id="tab-btn-dashboard" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition">
+        <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
+      </button>
+      <button onclick="App.setTab('generator')" id="tab-btn-generator" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition">
+        <i data-lucide="cpu" class="w-4 h-4"></i> Generador
+      </button>
+      <button onclick="App.setTab('editor')" id="tab-btn-editor" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition">
+        <i data-lucide="grid" class="w-4 h-4"></i> Editor Visual
+      </button>
+      <button onclick="App.setTab('notebook')" id="tab-btn-notebook" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition">
+        <i data-lucide="book-open" class="w-4 h-4"></i> Cuaderno (<span id="nav-page-count">0</span>)
+      </button>
+      <button onclick="App.setTab('rules')" id="tab-btn-rules" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition">
+        <i data-lucide="shield" class="w-4 h-4"></i> Reglas y Héroe
+      </button>
+      <button onclick="App.setTab('export')" id="tab-btn-export" class="tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium transition">
+        <i data-lucide="printer" class="w-4 h-4"></i> Exportar PDF
+      </button>
+    </nav>
+
+    <!-- ACCIONES RÁPIDAS -->
+    <div class="flex items-center gap-2">
+      <button onclick="App.saveProjectManual()" title="Guardar en navegador (IndexedDB)" class="px-2.5 py-1.5 rounded bg-forge-800 hover:bg-forge-700 border border-forge-600 text-xs flex items-center gap-1.5 text-gray-200">
+        <i data-lucide="save" class="w-3.5 h-3.5 text-amber-400"></i> Guardar
+      </button>
+      <button onclick="App.exportJSON()" title="Descargar archivo .json del proyecto" class="px-2.5 py-1.5 rounded bg-forge-800 hover:bg-forge-700 border border-forge-600 text-xs flex items-center gap-1.5 text-gray-200">
+        <i data-lucide="download" class="w-3.5 h-3.5"></i> JSON
+      </button>
+      <label title="Importar archivo .json" class="px-2.5 py-1.5 rounded bg-forge-800 hover:bg-forge-700 border border-forge-600 text-xs flex items-center gap-1.5 text-gray-200 cursor-pointer">
+        <i data-lucide="upload" class="w-3.5 h-3.5"></i> Importar
+        <input type="file" accept=".json" class="hidden" onchange="App.importJSON(event)" />
+      </label>
+      <button onclick="App.quickGeneratePDF()" class="px-3 py-1.5 rounded bg-amber-500 hover:bg-amber-400 text-forge-950 font-semibold text-xs flex items-center gap-1.5 shadow">
+        <i data-lucide="file-down" class="w-4 h-4"></i> Descargar PDF
+      </button>
+    </div>
+  </header>
+
+  <!-- CONTENEDOR PRINCIPAL DE VISTAS -->
+  <main class="flex-1 overflow-hidden relative">
+
+    <!-- ===================== VISTA 1: DASHBOARD ===================== -->
+    <section id="view-dashboard" class="h-full overflow-y-auto p-6 space-y-8 max-w-7xl mx-auto">
+      <!-- Hero Banner -->
+      <div class="bg-gradient-to-r from-forge-900 via-forge-800 to-forge-900 border border-forge-700 rounded-xl p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div class="space-y-2 max-w-2xl">
+          <div class="inline-flex items-center gap-2 text-xs font-mono uppercase text-amber-400 bg-amber-500/10 px-2.5 py-1 rounded border border-amber-500/20">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Motor Procedural Determinista + Exportación Vectorial
+          </div>
+          <h1 class="text-2xl font-bold text-white">Diseña cuadernos de exploración de mazmorras listos para imprimir</h1>
+          <p class="text-gray-400 text-sm leading-relaxed">
+            Crea campañas de múltiples plantas con algoritmos de conectividad verificada (BFS), edita cada casilla o entidad manualmente, organiza las páginas de tu cuaderno y genera un PDF vectorial de alta precisión en formato A4, A5 o Bolsillo.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3 shrink-0">
+          <button onclick="App.createNewProjectWizard()" class="px-4 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-forge-950 font-semibold flex items-center gap-2 shadow-lg">
+            <i data-lucide="plus-circle" class="w-4 h-4"></i> Nuevo Cuaderno (5 Plantas)
+          </button>
+          <button onclick="App.setTab('editor')" class="px-4 py-2.5 rounded-lg bg-forge-800 hover:bg-forge-700 border border-forge-600 text-white font-medium flex items-center gap-2">
+            <i data-lucide="edit-3" class="w-4 h-4 text-amber-400"></i> Ir al Editor Activo
+          </button>
+        </div>
+      </div>
+
+      <!-- Plantillas Prediseñadas -->
+      <div>
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h2 class="text-base font-semibold text-white flex items-center gap-2">
+              <i data-lucide="Compass" class="w-4 h-4 text-amber-400"></i> Biblioteca de Plantillas Temáticas
+            </h2>
+            <p class="text-xs text-gray-400">Selecciona una plantilla para configurar algoritmos, semillas, dimensiones, enemigos y ambientación automáticamente.</p>
+          </div>
+        </div>
+        <div id="dashboard-templates-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+      </div>
+
+      <!-- Proyectos Guardados en IndexedDB -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 bg-forge-900 border border-forge-700 rounded-xl p-5">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-base font-semibold text-white flex items-center gap-2">
+              <i data-lucide="folder-kanban" class="w-4 h-4 text-amber-400"></i> Proyectos Guardados (IndexedDB)
+            </h2>
+            <button onclick="App.duplicateCurrentProject()" class="text-xs px-2.5 py-1 rounded bg-forge-800 hover:bg-forge-700 border border-forge-600 text-gray-300 flex items-center gap-1">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i> Duplicar proyecto actual
+            </button>
+          </div>
+          <div id="saved-projects-list" class="space-y-2 max-h-64 overflow-y-auto pr-1"></div>
+        </div>
+
+        <!-- Resumen del Proyecto Activo -->
+        <div class="bg-forge-900 border border-forge-700 rounded-xl p-5 flex flex-col justify-between">
+          <div class="space-y-3">
+            <h2 class="text-base font-semibold text-white flex items-center gap-2">
+              <i data-lucide="activity" class="w-4 h-4 text-emerald-400"></i> Estado del Proyecto Activo
+            </h2>
+            <div id="active-project-stats" class="space-y-2 text-xs text-gray-300"></div>
+          </div>
+          <div class="pt-4 border-t border-forge-700 mt-4 flex flex-col gap-2">
+            <button onclick="App.rebuildNotebookPages(); App.setTab('notebook');" class="w-full py-2 rounded bg-forge-800 hover:bg-forge-700 border border-forge-600 text-amber-300 font-medium text-xs flex items-center justify-center gap-2">
+              <i data-lucide="wand-2" class="w-4 h-4"></i> Auto-Maquetar Cuaderno Completo
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== VISTA 2: GENERADOR PROCEDURAL ===================== -->
+    <section id="view-generator" class="h-full hidden overflow-hidden flex">
+      <!-- Panel de Parámetros -->
+      <div class="w-96 bg-forge-900 border-r border-forge-700 p-5 overflow-y-auto space-y-5 shrink-0">
+        <div class="flex items-center justify-between border-b border-forge-700 pb-3">
+          <div>
+            <h2 class="font-bold text-white text-base">Motor Procedural</h2>
+            <p class="text-xs text-gray-400">Configuración determinista por semilla</p>
+          </div>
+          <span class="px-2 py-0.5 text-[11px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 rounded">BFS Activo</span>
+        </div>
+
+        <!-- Semilla -->
+        <div class="space-y-1.5">
+          <label class="text-xs font-medium text-gray-300 flex items-center justify-between">
+            <span>Semilla Aleatoria (Seed)</span>
+            <button onclick="App.copySeed()" class="text-[11px] text-amber-400 hover:underline flex items-center gap-1">
+              <i data-lucide="copy" class="w-3 h-3"></i> Copiar
+            </button>
+          </label>
+          <div class="flex gap-1.5">
+            <input id="gen-seed" type="text" value="FORGE-2026-ALPHA" class="flex-1 bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 font-mono text-xs text-amber-300 focus:outline-none focus:border-amber-500" />
+            <button onclick="App.randomizeSeed()" title="Nueva semilla aleatoria" class="px-2.5 py-1.5 bg-forge-800 hover:bg-forge-700 border border-forge-600 rounded text-gray-200">
+              <i data-lucide="dices" class="w-4 h-4 text-amber-400"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Temática y Algoritmo -->
+        <div class="grid grid-cols-1 gap-3">
+          <div>
+            <label class="text-xs font-medium text-gray-300 block mb-1">Plantilla / Ambientación</label>
+            <select id="gen-theme" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-xs text-white focus:border-amber-500 focus:outline-none"></select>
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-300 block mb-1">Algoritmo de Generación</label>
+            <select id="gen-algorithm" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-xs text-white focus:border-amber-500 focus:outline-none">
+              <option value="auto">Automático (Según planta y plantilla)</option>
+              <option value="bsp">1. Binary Space Partitioning (BSP)</option>
+              <option value="rooms">2. Room & Corridor (Salas y Pasillos)</option>
+              <option value="backtracking">3. Recursive Backtracking (Laberinto)</option>
+              <option value="randomWalk">4. Random Walk (Recorrido Orgánico)</option>
+              <option value="cellular">5. Cellular Automata (Cavernas)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Dimensiones y Plantas -->
+        <div class="grid grid-cols-3 gap-2 pt-1">
+          <div>
+            <label class="text-[11px] text-gray-400 block mb-1">Nº Plantas</label>
+            <input id="gen-floors" type="number" min="1" max="15" value="5" class="w-full bg-forge-950 border border-forge-700 rounded px-2 py-1.5 text-xs font-mono text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-gray-400 block mb-1">Ancho (Celdas)</label>
+            <input id="gen-width" type="number" min="16" max="50" value="28" class="w-full bg-forge-950 border border-forge-700 rounded px-2 py-1.5 text-xs font-mono text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-gray-400 block mb-1">Alto (Celdas)</label>
+            <input id="gen-height" type="number" min="16" max="50" value="28" class="w-full bg-forge-950 border border-forge-700 rounded px-2 py-1.5 text-xs font-mono text-white" />
+          </div>
+        </div>
+
+        <!-- Sliders de Parámetros -->
+        <div class="space-y-3 pt-2 border-t border-forge-700">
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-gray-300">Número de Habitaciones</span>
+              <span id="lbl-gen-rooms" class="font-mono text-amber-400">9</span>
+            </div>
+            <input id="gen-rooms" type="range" min="4" max="20" value="9" oninput="document.getElementById('lbl-gen-rooms').innerText=this.value" class="w-full accent-amber-500" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-gray-300">Complejidad y Bifurcaciones</span>
+              <span id="lbl-gen-complexity" class="font-mono text-amber-400">Media (3)</span>
+            </div>
+            <input id="gen-complexity" type="range" min="1" max="5" value="3" oninput="document.getElementById('lbl-gen-complexity').innerText='Nivel '+this.value" class="w-full accent-amber-500" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs mb-1">
+              <span class="text-gray-300">Dificultad Global</span>
+              <span id="lbl-gen-difficulty" class="font-mono text-amber-400">Normal (3)</span>
+            </div>
+            <input id="gen-difficulty" type="range" min="1" max="5" value="3" oninput="document.getElementById('lbl-gen-difficulty').innerText='Nivel '+this.value" class="w-full accent-amber-500" />
+          </div>
+
+          <div class="grid grid-cols-2 gap-3 pt-1">
+            <div>
+              <label class="text-[11px] text-gray-400 block mb-1">Enemigos / Planta</label>
+              <input id="gen-enemies" type="number" min="0" max="25" value="7" class="w-full bg-forge-950 border border-forge-700 rounded px-2 py-1 text-xs font-mono text-white" />
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-400 block mb-1">Tesoros / Planta</label>
+              <input id="gen-treasures" type="number" min="0" max="20" value="5" class="w-full bg-forge-950 border border-forge-700 rounded px-2 py-1 text-xs font-mono text-white" />
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-400 block mb-1">Trampas / Planta</label>
+              <input id="gen-traps" type="number" min="0" max="20" value="4" class="w-full bg-forge-950 border border-forge-700 rounded px-2 py-1 text-xs font-mono text-white" />
+            </div>
+            <div>
+              <label class="text-[11px] text-gray-400 block mb-1">Salas Especiales</label>
+              <input id="gen-special" type="number" min="0" max="6" value="2" class="w-full bg-forge-950 border border-forge-700 rounded px-2 py-1 text-xs font-mono text-white" />
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2">
+            <label class="text-xs text-gray-300 flex items-center gap-2 cursor-pointer">
+              <input id="gen-secret-rooms" type="checkbox" checked class="accent-amber-500 rounded" />
+              Incluir Habitaciones Secretas
+            </label>
+          </div>
+        </div>
+
+        <!-- Botones de Acción de Generación -->
+        <div class="pt-3 border-t border-forge-700 space-y-2">
+          <button onclick="App.generateAllFloorsFromUI()" class="w-full py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-forge-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg">
+            <i data-lucide="zap" class="w-4 h-4"></i> Generar Todas las Plantas
+          </button>
+          <button onclick="App.regenerateActiveFloorOnly()" class="w-full py-2 rounded-lg bg-forge-800 hover:bg-forge-700 border border-forge-600 text-gray-200 font-medium text-xs flex items-center justify-center gap-2">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5 text-amber-400"></i> Regenerar Solo Planta Activa
+          </button>
+        </div>
+      </div>
+
+      <!-- Vista Previa Multi-Planta e Informe de Validación -->
+      <div class="flex-1 p-6 overflow-y-auto canvas-checker space-y-6">
+        <div class="flex items-center justify-between bg-forge-900/90 backdrop-blur border border-forge-700 rounded-xl p-4">
+          <div>
+            <h3 class="font-semibold text-white text-sm">Inspección de Plantas Generadas y Conectividad</h3>
+            <p class="text-xs text-gray-400">Todas las plantas garantizan un camino válido entre la Entrada (Escalera Arriba) y la Salida/Objetivo (Escalera Abajo o Jefe).</p>
+          </div>
+          <button onclick="App.setTab('editor')" class="px-3 py-1.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-medium hover:bg-amber-500/30 flex items-center gap-1.5">
+            <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i> Editar en Lienzo
+          </button>
+        </div>
+
+        <div id="generator-floors-preview" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"></div>
+      </div>
+    </section>
+
+    <!-- ===================== VISTA 3: EDITOR VISUAL DE MAZMORRAS ===================== -->
+    <section id="view-editor" class="h-full hidden overflow-hidden flex">
+      <!-- Barra de Herramientas Izquierda -->
+      <div class="w-64 bg-forge-900 border-r border-forge-700 flex flex-col justify-between p-3 shrink-0 overflow-y-auto">
+        <div class="space-y-4">
+          <!-- Selector de Planta -->
+          <div class="bg-forge-950 p-2.5 rounded-lg border border-forge-700 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-mono uppercase text-gray-400">Planta Activa</span>
+              <div class="flex gap-1">
+                <button onclick="App.addFloor()" title="Añadir nueva planta" class="p-1 rounded bg-forge-800 hover:bg-forge-700 text-emerald-400">
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="App.deleteActiveFloor()" title="Eliminar planta actual" class="p-1 rounded bg-forge-800 hover:bg-forge-700 text-rose-400">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+            <select id="editor-floor-select" onchange="App.selectFloor(parseInt(this.value))" class="w-full bg-forge-900 border border-forge-600 rounded px-2 py-1.5 text-xs font-medium text-white"></select>
+          </div>
+
+          <!-- Herramientas de Dibujo -->
+          <div>
+            <span class="text-[11px] font-mono uppercase text-gray-400 block mb-2">Herramientas de Mapa</span>
+            <div class="grid grid-cols-2 gap-1.5" id="editor-tools-container">
+              <button onclick="App.setEditorTool('select')" data-tool="select" class="editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border text-xs font-medium">
+                <i data-lucide="mouse-pointer" class="w-3.5 h-3.5"></i> Selección
+              </button>
+              <button onclick="App.setEditorTool('room')" data-tool="room" class="editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border text-xs font-medium">
+                <i data-lucide="square" class="w-3.5 h-3.5"></i> Habitación
+              </button>
+              <button onclick="App.setEditorTool('corridor')" data-tool="corridor" class="editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border text-xs font-medium">
+                <i data-lucide="git-commit" class="w-3.5 h-3.5"></i> Pasillo
+              </button>
+              <button onclick="App.setEditorTool('wall')" data-tool="wall" class="editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border text-xs font-medium">
+                <i data-lucide="brick-wall" class="w-3.5 h-3.5"></i> Pared
+              </button>
+              <button onclick="App.setEditorTool('door')" data-tool="door" class="editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border text-xs font-medium">
+                <i data-lucide="door-open" class="w-3.5 h-3.5"></i> Puerta
+              </button>
+              <button onclick="App.setEditorTool('secret_door')" data-tool="secret_door" class="editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border text-xs font-medium">
+                <i data-lucide="eye-off" class="w-3.5 h-3.5"></i> P. Secreta
+              </button>
+              <button onclick="App.setEditorTool('enemy')" data-tool="enemy" class="editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border text-xs font-medium">
+                <i data-lucide="skull" class="w-3.5 h-3.5 text-rose-400"></i> Enemigo
+              </button>
+              <button onclick="App.setEditorTool('treasure')" data-tool="treasure" class="editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border text-xs font-medium">
+                <i data-lucide="gem" class="w-3.5 h-3.5 text-amber-400"></i> Tesoro
+              </button>
+              <button onclick="App.setEditorTool('trap')" data-tool="trap" class="editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border text-xs font-medium">
+                <i data-lucide="flame" class="w-3.5 h-3.5 text-orange-400"></i> Trampa
+              </button>
+              <button onclick="App.setEditorTool('feature')" data-tool="feature" class="editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border text-xs font-medium">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyan-400"></i> Ambiental
+              </button>
+              <button onclick="App.setEditorTool('stairs')" data-tool="stairs" class="editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border text-xs font-medium">
+                <i data-lucide="arrow-up-down" class="w-3.5 h-3.5 text-emerald-400"></i> Escaleras
+              </button>
+              <button onclick="App.setEditorTool('eraser')" data-tool="eraser" class="editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border text-xs font-medium">
+                <i data-lucide="eraser" class="w-3.5 h-3.5 text-gray-400"></i> Borrador
+              </button>
+            </div>
+          </div>
+
+          <!-- Sub-Catálogo de Entidad a colocar -->
+          <div id="entity-subpalette" class="bg-forge-950 p-2.5 rounded-lg border border-forge-700 space-y-2">
+            <label class="text-[11px] font-mono uppercase text-gray-400 block">Elemento del Catálogo</label>
+            <select id="editor-catalog-item" class="w-full bg-forge-900 border border-forge-600 rounded px-2 py-1.5 text-xs text-white"></select>
+            <p id="editor-catalog-desc" class="text-[11px] text-gray-400 leading-tight"></p>
+          </div>
+
+          <!-- Controles de Cuadrícula y Vista -->
+          <div class="bg-forge-950 p-2.5 rounded-lg border border-forge-700 space-y-2.5">
+            <span class="text-[11px] font-mono uppercase text-gray-400 block">Cuadrícula y Lienzo</span>
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-gray-300">Tamaño celda (Zoom)</span>
+              <span id="lbl-cell-size" class="font-mono text-amber-400">24px</span>
+            </div>
+            <input id="editor-cell-size" type="range" min="14" max="42" value="24" oninput="App.setCellSize(parseInt(this.value))" class="w-full accent-amber-500" />
+            <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+              <input type="checkbox" id="chk-show-grid" checked onchange="App.renderEditorCanvas()" class="accent-amber-500" />
+              Mostrar líneas de cuadrícula
+            </label>
+            <label class="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+              <input type="checkbox" id="chk-show-path" checked onchange="App.renderEditorCanvas()" class="accent-amber-500" />
+              Resaltar ruta óptima (BFS)
+            </label>
+          </div>
+        </div>
+
+        <!-- Deshacer / Rehacer y Exportar PNG -->
+        <div class="space-y-2 pt-3 border-t border-forge-700">
+          <div class="grid grid-cols-2 gap-1.5">
+            <button onclick="App.undo()" class="px-2.5 py-1.5 rounded bg-forge-800 hover:bg-forge-700 border border-forge-600 text-xs flex items-center justify-center gap-1 text-gray-200">
+              <i data-lucide="undo-2" class="w-3.5 h-3.5"></i> Deshacer
+            </button>
+            <button onclick="App.redo()" class="px-2.5 py-1.5 rounded bg-forge-800 hover:bg-forge-700 border border-forge-600 text-xs flex items-center justify-center gap-1 text-gray-200">
+              <i data-lucide="redo-2" class="w-3.5 h-3.5"></i> Rehacer
+            </button>
+          </div>
+          <button onclick="App.exportCurrentMapPNG()" class="w-full py-1.5 rounded bg-forge-800 hover:bg-forge-700 border border-forge-600 text-xs flex items-center justify-center gap-1.5 text-amber-300">
+            <i data-lucide="image" class="w-3.5 h-3.5"></i> Descargar Planta en PNG
+          </button>
+        </div>
+      </div>
+
+      <!-- Lienzo Central Interactivo -->
+      <div class="flex-1 flex flex-col canvas-checker overflow-hidden relative">
+        <!-- Barra flotante de estado de la planta -->
+        <div class="h-10 bg-forge-900/90 backdrop-blur border-b border-forge-700 px-4 flex items-center justify-between text-xs z-10">
+          <div class="flex items-center gap-4">
+            <span id="editor-floor-title" class="font-semibold text-white">Planta 1</span>
+            <span id="editor-connectivity-badge" class="px-2 py-0.5 rounded text-[11px] font-mono"></span>
+            <span id="editor-coords-badge" class="font-mono text-gray-400">X: -, Y: -</span>
+          </div>
+          <div class="flex items-center gap-3 text-[11px] text-gray-400">
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 inline-block bg-emerald-500 rounded-full"></span> Entrada</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 inline-block bg-blue-500 rounded-full"></span> Salida</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 inline-block bg-rose-500 rounded-full"></span> Enemigo</span>
+            <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 inline-block bg-amber-400 rounded-full"></span> Tesoro</span>
+          </div>
+        </div>
+
+        <!-- Contenedor Scrollable del Canvas -->
+        <div class="flex-1 overflow-auto flex items-center justify-center p-8">
+          <div class="relative shadow-2xl border border-forge-700 bg-forge-950">
+            <canvas id="dungeon-canvas" class="cursor-crosshair block"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Panel Derecho: Inspector de Propiedades y Conexiones -->
+      <div class="w-80 bg-forge-900 border-l border-forge-700 p-4 overflow-y-auto space-y-5 shrink-0">
+        <div>
+          <h3 class="font-bold text-white text-sm flex items-center gap-2 border-b border-forge-700 pb-2">
+            <i data-lucide="sliders" class="w-4 h-4 text-amber-400"></i> Propiedades de Selección
+          </h3>
+          <div id="inspector-content" class="mt-3 space-y-3 text-xs"></div>
+        </div>
+
+        <!-- Propiedades de la Planta Actual -->
+        <div class="pt-3 border-t border-forge-700 space-y-2.5">
+          <h4 class="font-semibold text-gray-200 text-xs uppercase font-mono">Datos de la Planta</h4>
+          <div>
+            <label class="text-[11px] text-gray-400 block mb-1">Nombre de la Planta</label>
+            <input id="floor-prop-name" type="text" onchange="App.updateActiveFloorMeta()" class="w-full bg-forge-950 border border-forge-700 rounded px-2 py-1 text-xs text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-gray-400 block mb-1">Objetivo de la Planta</label>
+            <input id="floor-prop-objective" type="text" onchange="App.updateActiveFloorMeta()" class="w-full bg-forge-950 border border-forge-700 rounded px-2 py-1 text-xs text-white" />
+          </div>
+        </div>
+
+        <!-- Lista de Habitaciones y Conexiones entre Plantas -->
+        <div class="pt-3 border-t border-forge-700 space-y-2">
+          <h4 class="font-semibold text-gray-200 text-xs uppercase font-mono flex items-center justify-between">
+            <span>Salas Detectadas</span>
+            <span id="floor-room-count" class="text-amber-400">0</span>
+          </h4>
+          <div id="floor-rooms-list" class="space-y-1.5 max-h-52 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== VISTA 4: CONSTRUCTOR DE CUADERNOS ===================== -->
+    <section id="view-notebook" class="h-full hidden overflow-hidden flex">
+      <!-- Lista Lateral de Páginas -->
+      <div class="w-80 bg-forge-900 border-r border-forge-700 flex flex-col p-4 shrink-0">
+        <div class="flex items-center justify-between pb-3 border-b border-forge-700">
+          <div>
+            <h2 class="font-bold text-white text-sm">Páginas del Cuaderno</h2>
+            <p class="text-[11px] text-gray-400">Reordena, añade o personaliza hojas</p>
+          </div>
+          <button onclick="App.rebuildNotebookPages()" title="Regenerar cuaderno base" class="px-2 py-1 rounded bg-forge-800 hover:bg-forge-700 border border-forge-600 text-[11px] text-amber-300">
+            Auto-Generar
+          </button>
+        </div>
+
+        <!-- Añadir página por tipo -->
+        <div class="my-3 flex gap-1.5">
+          <select id="add-page-type-select" class="flex-1 bg-forge-950 border border-forge-700 rounded px-2 py-1.5 text-xs text-white">
+            <option value="cover">Portada</option>
+            <option value="intro">Presentación / Lore</option>
+            <option value="rules">Página de Reglas</option>
+            <option value="character">Ficha de Personaje</option>
+            <option value="map">Mapa de Mazmorra</option>
+            <option value="bestiary">Catálogo de Enemigos</option>
+            <option value="treasures">Tabla de Tesoros y Equipo</option>
+            <option value="events">Tabla de Acontecimientos</option>
+            <option value="tracker">Registro de Aventura</option>
+            <option value="notes">Página de Notas (Cuadrícula)</option>
+          </select>
+          <button onclick="App.addNotebookPage()" class="px-3 py-1.5 rounded bg-amber-500 hover:bg-amber-400 text-forge-950 font-semibold text-xs flex items-center gap-1">
+            <i data-lucide="plus" class="w-3.5 h-3.5"></i> Añadir
+          </button>
+        </div>
+
+        <!-- Presets rápidos de extensión de cuaderno -->
+        <div class="mb-3 flex items-center justify-between gap-1 text-[11px]">
+          <span class="text-gray-400">Preset extensión:</span>
+          <div class="flex gap-1">
+            <button onclick="App.setNotebookLengthPreset(10)" class="px-2 py-0.5 rounded bg-forge-800 hover:bg-forge-700 border border-forge-600 text-gray-200">10 pág</button>
+            <button onclick="App.setNotebookLengthPreset(20)" class="px-2 py-0.5 rounded bg-forge-800 hover:bg-forge-700 border border-forge-600 text-gray-200">20 pág</button>
+            <button onclick="App.setNotebookLengthPreset(30)" class="px-2 py-0.5 rounded bg-forge-800 hover:bg-forge-700 border border-forge-600 text-gray-200">30 pág</button>
+          </div>
+        </div>
+
+        <!-- Lista de Miniaturas de Página -->
+        <div id="notebook-pages-list" class="flex-1 overflow-y-auto space-y-2 pr-1"></div>
+      </div>
+
+      <!-- Vista Previa en Vivo de la Página Seleccionada -->
+      <div class="flex-1 canvas-checker overflow-y-auto p-8 flex flex-col items-center justify-start">
+        <div class="mb-4 flex items-center gap-3 bg-forge-900 px-4 py-2 rounded-full border border-forge-700 shadow">
+          <button onclick="App.stepNotebookPage(-1)" class="p-1 hover:text-amber-400"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+          <span id="notebook-preview-indicator" class="text-xs font-mono text-white">Página 1 de 1</span>
+          <button onclick="App.stepNotebookPage(1)" class="p-1 hover:text-amber-400"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+        </div>
+
+        <!-- Hoja Renderizada -->
+        <div id="notebook-page-canvas-wrapper" class="bg-white text-gray-900 rounded shadow-2xl paper-preview w-full max-w-[560px] min-h-[780px] p-8 flex flex-col justify-between relative"></div>
+      </div>
+
+      <!-- Inspector de Configuración de la Página -->
+      <div class="w-80 bg-forge-900 border-l border-forge-700 p-4 overflow-y-auto space-y-4 shrink-0">
+        <h3 class="font-bold text-white text-sm border-b border-forge-700 pb-2">Configuración de Página</h3>
+        <div id="notebook-page-inspector" class="space-y-3 text-xs"></div>
+      </div>
+    </section>
+
+    <!-- ===================== VISTA 5: REGLAS Y FICHA DE HÉROE ===================== -->
+    <section id="view-rules" class="h-full hidden overflow-y-auto p-6 max-w-6xl mx-auto space-y-6">
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Ficha del Personaje Inicial -->
+        <div class="bg-forge-900 border border-forge-700 rounded-xl p-5 space-y-4">
+          <h2 class="text-base font-bold text-white flex items-center gap-2 border-b border-forge-700 pb-2">
+            <i data-lucide="user-check" class="w-4 h-4 text-amber-400"></i> Configuración de Ficha de Personaje
+          </h2>
+          <div class="grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="text-gray-400 block mb-1">Nombre del Héroe</label>
+              <input id="char-name" type="text" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white" onchange="App.saveRulesAndCharacterFromUI()" />
+            </div>
+            <div>
+              <label class="text-gray-400 block mb-1">Clase / Arquetipo</label>
+              <select id="char-class" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white" onchange="App.saveRulesAndCharacterFromUI()">
+                <option value="Guerrero del Alba">Guerrero del Alba</option>
+                <option value="Explorador de Criptas">Explorador de Criptas</option>
+                <option value="Arcanista Rúnico">Arcanista Rúnico</option>
+                <option value="Clérigo de la Llama">Clérigo de la Llama</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-gray-400 block mb-1">Salud Máxima (HP)</label>
+              <input id="char-hp" type="number" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white font-mono" onchange="App.saveRulesAndCharacterFromUI()" />
+            </div>
+            <div>
+              <label class="text-gray-400 block mb-1">Ataque (ATK)</label>
+              <input id="char-atk" type="number" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white font-mono" onchange="App.saveRulesAndCharacterFromUI()" />
+            </div>
+            <div>
+              <label class="text-gray-400 block mb-1">Defensa (DEF)</label>
+              <input id="char-def" type="number" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white font-mono" onchange="App.saveRulesAndCharacterFromUI()" />
+            </div>
+            <div>
+              <label class="text-gray-400 block mb-1">Velocidad (Dado d6 + X)</label>
+              <input id="char-spd" type="number" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white font-mono" onchange="App.saveRulesAndCharacterFromUI()" />
+            </div>
+            <div>
+              <label class="text-gray-400 block mb-1">Oro Inicial</label>
+              <input id="char-gold" type="number" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white font-mono" onchange="App.saveRulesAndCharacterFromUI()" />
+            </div>
+            <div>
+              <label class="text-gray-400 block mb-1">Equipo Inicial (Separado por comas)</label>
+              <input id="char-items" type="text" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white" onchange="App.saveRulesAndCharacterFromUI()" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Sistema de Reglas de Exploración -->
+        <div class="bg-forge-900 border border-forge-700 rounded-xl p-5 space-y-4">
+          <h2 class="text-base font-bold text-white flex items-center gap-2 border-b border-forge-700 pb-2">
+            <i data-lucide="scroll-text" class="w-4 h-4 text-amber-400"></i> Reglas del Sistema Roll & Write
+          </h2>
+          <div class="space-y-3 text-xs">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="text-gray-400 block mb-1">Dado de Movimiento</label>
+                <select id="rule-dice" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white" onchange="App.saveRulesAndCharacterFromUI()">
+                  <option value="1d6">1d6 casillas por turno</option>
+                  <option value="2d6">2d6 casillas por turno</option>
+                  <option value="1d4+2">1d4 + 2 casillas por turno</option>
+                </select>
+              </div>
+              <div>
+                <label class="text-gray-400 block mb-1">Resolución de Combate</label>
+                <select id="rule-combat" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white" onchange="App.saveRulesAndCharacterFromUI()">
+                  <option value="1d6 + ATK vs DEF Enemigo">1d6 + ATK contra Nivel Enemigo</option>
+                  <option value="Comparación directa ATK/HP">Desgaste directo por rondas</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="text-gray-400 block mb-1">Resumen de Reglas Impresas en el Cuaderno</label>
+              <textarea id="rule-summary" rows="6" class="w-full bg-forge-950 border border-forge-700 rounded p-2.5 text-white leading-relaxed" onchange="App.saveRulesAndCharacterFromUI()"></textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Catálogo Editable de Enemigos -->
+      <div class="bg-forge-900 border border-forge-700 rounded-xl p-5 space-y-4">
+        <div class="flex items-center justify-between border-b border-forge-700 pb-2">
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <i data-lucide="swords" class="w-4 h-4 text-rose-400"></i> Bestiario del Proyecto (Valores usados en mapas y tablas PDF)
+          </h2>
+        </div>
+        <div id="rules-bestiary-table" class="overflow-x-auto"></div>
+      </div>
+    </section>
+
+    <!-- ===================== VISTA 6: EXPORTACIÓN PDF ===================== -->
+    <section id="view-export" class="h-full hidden overflow-hidden flex">
+      <!-- Configuración de Impresión -->
+      <div class="w-96 bg-forge-900 border-r border-forge-700 p-5 overflow-y-auto space-y-5 shrink-0">
+        <div>
+          <h2 class="font-bold text-white text-base">Exportación PDF Vectorial</h2>
+          <p class="text-xs text-gray-400">Generado con primitivas vectoriales nativas</p>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="text-gray-300 font-medium block mb-1">Formato de Papel</label>
+            <select id="pdf-format" onchange="App.updateExportPreview()" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-2 text-white">
+              <option value="A5">A5 (148 × 210 mm) — Estándar Cuaderno</option>
+              <option value="A4">A4 (210 × 297 mm) — Manual Completo</option>
+              <option value="POCKET">Bolsillo (3 × 5 pulgadas / 76 × 127 mm)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-gray-300 font-medium block mb-1">Orientación</label>
+            <select id="pdf-orientation" onchange="App.updateExportPreview()" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-2 text-white">
+              <option value="portrait">Vertical (Portrait)</option>
+              <option value="landscape">Horizontal (Landscape)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="text-gray-300 font-medium block mb-1">Modo de Color de Impresión</label>
+            <select id="pdf-colormode" onchange="App.updateExportPreview()" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-2 text-white">
+              <option value="bw">Blanco y Negro Puro (Óptimo para Lápiz / Impresora Láser)</option>
+              <option value="grayscale">Escala de Grises Suave</option>
+              <option value="color">Color Completo</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="text-gray-300 font-medium block mb-1">Márgenes (pt)</label>
+              <input id="pdf-margin" type="number" min="12" max="60" value="28" onchange="App.updateExportPreview()" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white font-mono" />
+            </div>
+            <div>
+              <label class="text-gray-300 font-medium block mb-1">Alcance</label>
+              <select id="pdf-scope" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white">
+                <option value="all">Cuaderno Completo</option>
+                <option value="maps_only">Solo Mapas de Plantas</option>
+                <option value="current_floor">Solo Planta Activa</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="space-y-2 pt-2 border-t border-forge-700">
+            <label class="flex items-center gap-2 text-gray-300 cursor-pointer">
+              <input id="pdf-numbering" type="checkbox" checked class="accent-amber-500" />
+              Incluir numeración automática y encabezados
+            </label>
+            <label class="flex items-center gap-2 text-gray-300 cursor-pointer">
+              <input id="pdf-cropmarks" type="checkbox" class="accent-amber-500" />
+              Añadir marcas de corte de imprenta (Bleed/Crop)
+            </label>
+            <label class="flex items-center gap-2 text-gray-300 cursor-pointer">
+              <input id="pdf-legend" type="checkbox" checked class="accent-amber-500" />
+              Incluir leyenda y registro de casillas en cada mapa
+            </label>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-forge-700 space-y-2.5">
+          <button id="btn-generate-pdf" onclick="App.generateAndDownloadPDF()" class="w-full py-3 rounded-lg bg-amber-500 hover:bg-amber-400 text-forge-950 font-bold text-sm flex items-center justify-center gap-2 shadow-lg">
+            <i data-lucide="file-check-2" class="w-5 h-5"></i> Generar y Descargar PDF
+          </button>
+          <div id="pdf-progress-box" class="hidden text-center text-xs text-amber-300 font-mono py-1">
+            Maquetando vectores PDF...
+          </div>
+        </div>
+      </div>
+
+      <!-- Vista Previa de Pliegos de Impresión -->
+      <div class="flex-1 p-6 overflow-y-auto canvas-checker space-y-4">
+        <div class="flex items-center justify-between bg-forge-900 border border-forge-700 rounded-xl p-4">
+          <div>
+            <h3 class="font-bold text-white text-sm">Previsualización de Maquetación de Impresión</h3>
+            <p id="export-summary-text" class="text-xs text-gray-400"></p>
+          </div>
+          <span class="text-xs font-mono px-2.5 py-1 rounded bg-forge-800 border border-forge-600 text-gray-300">Vectores PDF-Lib 300+ DPI equivalentes</span>
+        </div>
+
+        <div id="export-sheets-preview" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- NOTIFICACIÓN TOAST -->
+  <div id="toast-notification" class="fixed bottom-4 right-4 z-50 hidden bg-forge-900 border border-amber-500/50 text-white px-4 py-2.5 rounded-lg shadow-2xl flex items-center gap-2.5 text-xs">
+    <i data-lucide="info" class="w-4 h-4 text-amber-400"></i>
+    <span id="toast-message">Acción completada</span>
+  </div>
+
+  <!-- =====================================================================
+       LÓGICA DE ARQUITECTURA MODULAR: PRNG, MOTOR PROCEDURAL, EDITOR Y PDF
+       ===================================================================== -->
+  <script>
+    /*************************************************************************
+     * 1. GENERADOR PSEUDOALEATORIO CON SEMILLA (PRNG - MULBERRY32)
+     *************************************************************************/
+    class SeededRNG {
+      constructor(seedString) {
+        this.seedString = String(seedString || 'DUNGEON-FORGE');
+        let h = 1779033703 ^ this.seedString.length;
+        for (let i = 0; i < this.seedString.length; i++) {
+          h = Math.imul(h ^ this.seedString.charCodeAt(i), 3432918353);
+          h = (h << 13) | (h >>> 19);
+        }
+        this.state = (h >>> 0) || 1;
+      }
+
+      next() {
+        let t = (this.state += 0x6D2B79F5);
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      }
+
+      int(min, max) {
+        return Math.floor(this.next() * (max - min + 1)) + min;
+      }
+
+      pick(arr) {
+        if (!arr || arr.length === 0) return null;
+        return arr[this.int(0, arr.length - 1)];
+      }
+
+      chance(prob) {
+        return this.next() < prob;
+      }
+    }
+
+    /*************************************************************************
+     * 2. CATÁLOGOS DE PLANTILLAS, HABITACIONES, ENEMIGOS, TESOROS Y AMBIENTE
+     *************************************************************************/
+    const CATALOG = {
+      themes: [
+        { id: 'medieval', name: 'Mazmorra Medieval', algo: 'bsp', desc: 'Celdas de piedra labrada, guardias caídos y cámaras reales.', floorPrefix: 'Bastión Subterráneo' },
+        { id: 'catacombs', name: 'Catacumbas Ancestrales', algo: 'backtracking', desc: 'Pasillos estrechos repletos de osarios, criptas y espectros.', floorPrefix: 'Nivel de Osario' },
+        { id: 'mines', name: 'Minas Abandonadas', algo: 'randomWalk', desc: 'Galerías excavadas en la roca con vetas de oro y goblins.', floorPrefix: 'Galería Minera' },
+        { id: 'cavern', name: 'Cueva Natural Profunda', algo: 'cellular', desc: 'Formaciones orgánicas kársticas con arañas gigantes y pozos.', floorPrefix: 'Caverna Abisal' },
+        { id: 'temple', name: 'Templo Antiguo', algo: 'rooms', desc: 'Santuarios simétricos con altares, trampas rúnicas y guardianes.', floorPrefix: 'Claustro Sagrado' },
+        { id: 'volcanic', name: 'Forja Volcánica', algo: 'cellular', desc: 'Ríos de magma, demonios de ceniza y cámaras de obsidiana.', floorPrefix: 'Cráter de Ceniza' },
+        { id: 'elven', name: 'Ruinas Élficas', algo: 'rooms', desc: 'Bibliotecas arcanas, teletransportadores y jardines marchitos.', floorPrefix: 'Salón Silvano' },
+        { id: 'demonic', name: 'Fortaleza Demoníaca', algo: 'bsp', desc: 'Ciudadela abisal custodiada por señores del caos y portales.', floorPrefix: 'Círculo Infernal' }
+      ],
+
+      roomTypes: [
+        'Habitación normal', 'Habitación grande', 'Habitación pequeña',
+        'Sala del tesoro', 'Sala del jefe final', 'Sala de comerciantes',
+        'Sala de descanso', 'Sala secreta', 'Sala de trampas',
+        'Sala de teletransportación', 'Biblioteca', 'Cripta', 'Santuario', 'Cárcel'
+      ],
+
+      enemies: [
+        { id: 'skeleton', code: 'E1', name: 'Esqueleto', level: 1, hp: 4, dmg: 2, reward: '10 Oro', desc: 'Guerrero animado por necromancia antigua.' },
+        { id: 'goblin', code: 'E2', name: 'Goblin Saqueador', level: 1, hp: 5, dmg: 2, reward: '15 Oro', desc: 'Rápido y traicionero en pasillos estrechos.' },
+        { id: 'spider', code: 'E3', name: 'Araña Gigante', level: 2, hp: 6, dmg: 3, reward: 'Poción Menor', desc: 'Teje emboscadas en techos oscuros.' },
+        { id: 'zombie', code: 'E4', name: 'Zombi de Cripta', level: 2, hp: 8, dmg: 2, reward: '15 Oro', desc: 'Lento pero sumamente resistente.' },
+        { id: 'orc', code: 'E5', name: 'Orco Berserker', level: 3, hp: 10, dmg: 4, reward: '25 Oro', desc: 'Ataca con hachas pesadas de hierro.' },
+        { id: 'wraith', code: 'E6', name: 'Espectro Sombrío', level: 3, hp: 9, dmg: 4, reward: 'Pergamino Arcano', desc: 'Atraviesa armaduras convencionales.' },
+        { id: 'troll', code: 'E7', name: 'Troll de Caverna', level: 4, hp: 14, dmg: 5, reward: '40 Oro', desc: 'Regenera heridas si no se abate rápido.' },
+        { id: 'demon', code: 'E8', name: 'Demonio de Ceniza', level: 4, hp: 16, dmg: 6, reward: 'Artefacto Rúnico', desc: 'Envuelto en llamas abisales.' },
+        { id: 'dragon', code: 'E9', name: 'Dragón Subterráneo', level: 5, hp: 22, dmg: 7, reward: '100 Oro + Reliquia', desc: 'Señor ancestral de las cámaras profundas.' },
+        { id: 'boss', code: 'JB', name: 'Jefe Final del Nivel', level: 5, hp: 25, dmg: 8, reward: 'Llave Maestra + 150 Oro', desc: 'Custodio principal de la escalera de descenso.' }
+      ],
+
+      treasures: [
+        { id: 'chest', code: 'T1', name: 'Cofre de Hierro', value: '2d6 × 10 Oro', desc: 'Cofre reforzado con cerradura antigua.' },
+        { id: 'gold', code: 'T2', name: 'Bolsa de Oro', value: '25 Monedas', desc: 'Monedas acuñadas en eras olvidadas.' },
+        { id: 'potion', code: 'T3', name: 'Poción Curativa', value: '+6 HP', desc: 'Restaura vitalidad al instante.' },
+        { id: 'weapon', code: 'T4', name: 'Espada Templada', value: '+2 ATK', desc: 'Hoja equilibrada de acero enano.' },
+        { id: 'armor', code: 'T5', name: 'Cota de Malla', value: '+2 DEF', desc: 'Reduce el daño recibido en combate.' },
+        { id: 'key', code: 'T6', name: 'Llave de Bronce', value: 'Abre 1 Puerta Cerrada', desc: 'Llave numerada para cámaras selladas.' },
+        { id: 'scroll', code: 'T7', name: 'Pergamino de Fuego', value: '8 Daño Directo', desc: 'Hechizo de un solo uso.' },
+        { id: 'artifact', code: 'T8', name: 'Artefacto Mágico', value: '+1 Velocidad permanente', desc: 'Reliquia imbuida de energía astral.' }
+      ],
+
+      traps: [
+        { id: 'spikes', code: 'X1', name: 'Foso de Pinchos', dmg: 3, desc: 'Tira 1d6: con 1-3 sufres 3 de daño.' },
+        { id: 'darts', code: 'X2', name: 'Dardos Envenenados', dmg: 2, desc: 'Disparo oculto en el muro.' },
+        { id: 'gas', code: 'X3', name: 'Trampa de Gas Somnífero', dmg: 2, desc: 'Pierdes 2 HP y retrocedes 1 casilla.' },
+        { id: 'rune', code: 'X4', name: 'Glifo Explosivo', dmg: 4, desc: 'Runa arcana que detona al pisar.' }
+      ],
+
+      features: [
+        { id: 'fountain', code: 'F1', name: 'Fuente Cristalina', desc: 'Recupera +4 HP una vez por planta.' },
+        { id: 'altar', code: 'F2', name: 'Altar Antiguo', desc: 'Ofrece 20 de oro para ganar +1 ATK en esta planta.' },
+        { id: 'teleporter', code: 'TP', name: 'Círculo de Teletransporte', desc: 'Conecta instantáneamente con otro portal.' },
+        { id: 'statue', code: 'F3', name: 'Estatua Enigmática', desc: 'Inspeccionar (50% tesoro oculto, 50% trampa).' },
+        { id: 'lever', code: 'F4', name: 'Palanca de Mecanismo', desc: 'Desbloquea puertas secretas o puentes.' },
+        { id: 'well', code: 'F5', name: 'Pozo Profundo', desc: 'Permite descender usando una cuerda.' }
+      ]
+    };
+
+    /*************************************************************************
+     * 3. MOTOR DE GENERACIÓN PROCEDURAL Y VALIDACIÓN BFS
+     * Códigos de Celda:
+     * 0 = Vacío/Roca, 1 = Suelo Habitación, 2 = Pasillo, 3 = Puerta,
+     * 4 = Puerta Secreta, 5 = Suelo Sala Secreta
+     *************************************************************************/
+    const ProceduralEngine = {
+      createEmptyGrid(w, h, fill = 0) {
+        return Array.from({ length: h }, () => Array(w).fill(fill));
+      },
+
+      generateFloor(config, floorIndex) {
+        const floorSeed = `${config.seed}-F${floorIndex + 1}`;
+        const rng = new SeededRNG(floorSeed);
+        const w = Math.max(16, Math.min(50, parseInt(config.width) || 28));
+        const h = Math.max(16, Math.min(50, parseInt(config.height) || 28));
+
+        let algo = config.algorithm;
+        if (algo === 'auto') {
+          const themeObj = CATALOG.themes.find(t => t.id === config.theme) || CATALOG.themes[0];
+          const rotation = [themeObj.algo, 'bsp', 'rooms', 'backtracking', 'cellular', 'randomWalk'];
+          algo = rotation[floorIndex % rotation.length];
+        }
+
+        let grid = this.createEmptyGrid(w, h, 0);
+        let rooms = [];
+
+        if (algo === 'bsp') {
+          ({ grid, rooms } = this.runBSP(w, h, config, rng));
+        } else if (algo === 'rooms') {
+          ({ grid, rooms } = this.runRoomAndCorridor(w, h, config, rng));
+        } else if (algo === 'backtracking') {
+          ({ grid, rooms } = this.runBacktracking(w, h, config, rng));
+        } else if (algo === 'randomWalk') {
+          ({ grid, rooms } = this.runRandomWalk(w, h, config, rng));
+        } else if (algo === 'cellular') {
+          ({ grid, rooms } = this.runCellularAutomata(w, h, config, rng));
+        } else {
+          ({ grid, rooms } = this.runBSP(w, h, config, rng));
+        }
+
+        // Asegurar bordes de roca sólida
+        for (let x = 0; x < w; x++) { grid[0][x] = 0; grid[h - 1][x] = 0; }
+        for (let y = 0; y < h; y++) { grid[y][0] = 0; grid[y][w - 1] = 0; }
+
+        // Añadir habitación secreta si está activado
+        if (config.secretRooms && rooms.length >= 2) {
+          this.tryAddSecretRoom(grid, rooms, w, h, rng);
+        }
+
+        // Asignar tipos y nombres a las habitaciones
+        this.assignRoomSemantics(rooms, floorIndex, config, rng);
+
+        // Colocar puertas en transiciones habitación <-> pasillo
+        this.placeDoors(grid, rooms, w, h, rng);
+
+        // Determinar Entrada y Salida
+        const startPos = rooms.length > 0 ? { x: rooms[0].cx, y: rooms[0].cy } : this.findFirstWalkable(grid, w, h);
+        const endPos = rooms.length > 1
+          ? { x: rooms[rooms.length - 1].cx, y: rooms[rooms.length - 1].cy }
+          : this.findFarthestWalkable(grid, w, h, startPos);
+
+        // Validar conectividad mediante BFS y excavar túnel corrector si hace falta
+        let path = this.findShortestPathBFS(grid, w, h, startPos, endPos);
+        if (!path || path.length === 0) {
+          this.carveLCorridor(grid, startPos.x, startPos.y, endPos.x, endPos.y, 2);
+          path = this.findShortestPathBFS(grid, w, h, startPos, endPos);
+        }
+
+        // Garantizar que TODAS las habitaciones sean alcanzables desde la entrada
+        for (let i = 1; i < rooms.length; i++) {
+          const rCheck = this.findShortestPathBFS(grid, w, h, startPos, { x: rooms[i].cx, y: rooms[i].cy });
+          if (!rCheck) {
+            this.carveLCorridor(grid, rooms[i - 1].cx, rooms[i - 1].cy, rooms[i].cx, rooms[i].cy, 2);
+          }
+        }
+        path = this.findShortestPathBFS(grid, w, h, startPos, endPos) || [];
+
+        // Distribuir Entidades (Escaleras, Enemigos, Tesoros, Trampas, Ambientales)
+        const entities = this.populateEntities(grid, rooms, w, h, startPos, endPos, floorIndex, config, rng);
+
+        const themeInfo = CATALOG.themes.find(t => t.id === config.theme) || CATALOG.themes[0];
+        return {
+          id: `floor_${floorIndex + 1}_${Date.now()}`,
+          floorNumber: floorIndex + 1,
+          name: `${themeInfo.floorPrefix} — Planta ${floorIndex + 1}`,
+          algorithm: algo,
+          width: w,
+          height: h,
+          difficulty: Math.min(5, Math.max(1, parseInt(config.difficulty) + Math.floor(floorIndex / 2))),
+          objective: floorIndex + 1 === parseInt(config.floors)
+            ? 'Derrotar al Jefe Final y recuperar la Reliquia Mayor'
+            : `Localizar la escalera de descenso hacia la Planta ${floorIndex + 2}`,
+          grid,
+          rooms,
+          entities,
+          validPath: path,
+          isConnected: path.length > 0
+        };
+      },
+
+      // Algoritmo 1: Binary Space Partitioning (BSP)
+      runBSP(w, h, config, rng) {
+        const grid = this.createEmptyGrid(w, h, 0);
+        const targetRooms = Math.max(4, parseInt(config.roomsCount) || 8);
+        const leaves = [{ x: 1, y: 1, w: w - 2, h: h - 2 }];
+
+        while (leaves.length < targetRooms * 1.4) {
+          let splitDone = false;
+          for (let i = 0; i < leaves.length; i++) {
+            const leaf = leaves[i];
+            if (leaf.w > 11 || leaf.h > 11) {
+              const splitH = leaf.w > leaf.h ? false : (leaf.h > leaf.w ? true : rng.chance(0.5));
+              if (splitH && leaf.h >= 10) {
+                const split = rng.int(4, leaf.h - 5);
+                leaves.splice(i, 1,
+                  { x: leaf.x, y: leaf.y, w: leaf.w, h: split },
+                  { x: leaf.x, y: leaf.y + split, w: leaf.w, h: leaf.h - split }
+                );
+                splitDone = true;
+                break;
+              } else if (!splitH && leaf.w >= 10) {
+                const split = rng.int(4, leaf.w - 5);
+                leaves.splice(i, 1,
+                  { x: leaf.x, y: leaf.y, w: split, h: leaf.h },
+                  { x: leaf.x + split, y: leaf.y, w: leaf.w - split, h: leaf.h }
+                );
+                splitDone = true;
+                break;
+              }
+            }
+          }
+          if (!splitDone) break;
+        }
+
+        const rooms = [];
+        for (const leaf of leaves) {
+          if (rooms.length >= targetRooms) break;
+          const rw = rng.int(3, Math.max(3, leaf.w - 2));
+          const rh = rng.int(3, Math.max(3, leaf.h - 2));
+          const rx = leaf.x + rng.int(1, Math.max(1, leaf.w - rw - 1));
+          const ry = leaf.y + rng.int(1, Math.max(1, leaf.h - rh - 1));
+          if (rx + rw < w - 1 && ry + rh < h - 1) {
+            const room = {
+              id: `R${rooms.length + 1}`,
+              x: rx, y: ry, w: rw, h: rh,
+              cx: Math.floor(rx + rw / 2),
+              cy: Math.floor(ry + rh / 2),
+              type: 'Habitación normal',
+              name: `Cámara ${rooms.length + 1}`
+            };
+            rooms.push(room);
+            this.carveRect(grid, rx, ry, rw, rh, 1);
+          }
+        }
+
+        for (let i = 1; i < rooms.length; i++) {
+          this.carveLCorridor(grid, rooms[i - 1].cx, rooms[i - 1].cy, rooms[i].cx, rooms[i].cy, 2);
+          if (rng.chance(0.35 * (config.complexity / 3)) && i >= 2) {
+            this.carveLCorridor(grid, rooms[i - 2].cx, rooms[i - 2].cy, rooms[i].cx, rooms[i].cy, 2);
+          }
+        }
+        return { grid, rooms };
+      },
+
+      // Algoritmo 2: Room & Corridor
+      runRoomAndCorridor(w, h, config, rng) {
+        const grid = this.createEmptyGrid(w, h, 0);
+        const rooms = [];
+        const target = Math.max(4, parseInt(config.roomsCount) || 9);
+        let attempts = 0;
+
+        while (rooms.length < target && attempts < 250) {
+          attempts++;
+          const rw = rng.int(3, 7);
+          const rh = rng.int(3, 6);
+          const rx = rng.int(2, w - rw - 2);
+          const ry = rng.int(2, h - rh - 2);
+
+          let overlaps = false;
+          for (const r of rooms) {
+            if (rx < r.x + r.w + 1 && rx + rw + 1 > r.x && ry < r.y + r.h + 1 && ry + rh + 1 > r.y) {
+              overlaps = true;
+              break;
+            }
+          }
+          if (!overlaps) {
+            const room = {
+              id: `R${rooms.length + 1}`,
+              x: rx, y: ry, w: rw, h: rh,
+              cx: Math.floor(rx + rw / 2),
+              cy: Math.floor(ry + rh / 2),
+              type: 'Habitación normal',
+              name: `Sala ${rooms.length + 1}`
+            };
+            rooms.push(room);
+            this.carveRect(grid, rx, ry, rw, rh, 1);
+          }
+        }
+
+        // Ordenar por cercanía para crear red coherente
+        rooms.sort((a, b) => (a.cx + a.cy) - (b.cx + b.cy));
+        for (let i = 1; i < rooms.length; i++) {
+          this.carveLCorridor(grid, rooms[i - 1].cx, rooms[i - 1].cy, rooms[i].cx, rooms[i].cy, 2);
+        }
+        // Pasillos extra según complejidad
+        const extraLoops = Math.floor(config.complexity || 2);
+        for (let k = 0; k < extraLoops && rooms.length > 2; k++) {
+          const a = rng.pick(rooms);
+          const b = rng.pick(rooms);
+          if (a !== b) this.carveLCorridor(grid, a.cx, a.cy, b.cx, b.cy, 2);
+        }
+
+        return { grid, rooms };
+      },
+
+      // Algoritmo 3: Recursive Backtracking (Laberinto + Cámaras)
+      runBacktracking(w, h, config, rng) {
+        const grid = this.createEmptyGrid(w, h, 0);
+        const startX = 2, startY = 2;
+        const stack = [{ x: startX, y: startY }];
+        grid[startY][startX] = 2;
+
+        const dirs = [
+          { dx: 0, dy: -2 }, { dx: 2, dy: 0 },
+          { dx: 0, dy: 2 }, { dx: -2, dy: 0 }
+        ];
+
+        while (stack.length > 0) {
+          const current = stack[stack.length - 1];
+          const neighbors = [];
+
+          for (const d of dirs) {
+            const nx = current.x + d.dx;
+            const ny = current.y + d.dy;
+            if (nx > 1 && nx < w - 2 && ny > 1 && ny < h - 2 && grid[ny][nx] === 0) {
+              neighbors.push({ nx, ny, mx: current.x + d.dx / 2, my: current.y + d.dy / 2 });
+            }
+          }
+
+          if (neighbors.length > 0) {
+            const chosen = rng.pick(neighbors);
+            grid[chosen.my][chosen.mx] = 2;
+            grid[chosen.ny][chosen.nx] = 2;
+            stack.push({ x: chosen.nx, y: chosen.ny });
+          } else {
+            stack.pop();
+          }
+        }
+
+        // Esculpir habitaciones sobre el laberinto para hacerla jugable
+        const rooms = [];
+        const roomCount = Math.max(4, Math.min(12, parseInt(config.roomsCount) || 7));
+        for (let i = 0; i < roomCount; i++) {
+          const rw = rng.int(3, 5);
+          const rh = rng.int(3, 5);
+          const rx = rng.int(2, w - rw - 2);
+          const ry = rng.int(2, h - rh - 2);
+          this.carveRect(grid, rx, ry, rw, rh, 1);
+          rooms.push({
+            id: `R${i + 1}`,
+            x: rx, y: ry, w: rw, h: rh,
+            cx: Math.floor(rx + rw / 2),
+            cy: Math.floor(ry + rh / 2),
+            type: 'Habitación normal',
+            name: `Cámara Laberíntica ${i + 1}`
+          });
+        }
+
+        return { grid, rooms };
+      },
+
+      // Algoritmo 4: Random Walk
+      runRandomWalk(w, h, config, rng) {
+        const grid = this.createEmptyGrid(w, h, 0);
+        let x = Math.floor(w / 2);
+        let y = Math.floor(h / 2);
+        const targetFloors = Math.floor(w * h * 0.34);
+        let carved = 0;
+        const rooms = [];
+
+        const dirs = [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }];
+
+        let steps = 0;
+        while (carved < targetFloors && steps < w * h * 10) {
+          steps++;
+          if (grid[y][x] === 0) {
+            grid[y][x] = 2;
+            carved++;
+          }
+          if (rng.chance(0.04) && rooms.length < (parseInt(config.roomsCount) || 8)) {
+            const rw = rng.int(3, 5);
+            const rh = rng.int(3, 5);
+            const rx = Math.max(2, Math.min(w - rw - 2, x - 1));
+            const ry = Math.max(2, Math.min(h - rh - 2, y - 1));
+            this.carveRect(grid, rx, ry, rw, rh, 1);
+            rooms.push({
+              id: `R${rooms.length + 1}`,
+              x: rx, y: ry, w: rw, h: rh,
+              cx: Math.floor(rx + rw / 2),
+              cy: Math.floor(ry + rh / 2),
+              type: 'Habitación normal',
+              name: `Galería ${rooms.length + 1}`
+            });
+          }
+          const d = rng.pick(dirs);
+          x = Math.max(2, Math.min(w - 3, x + d.dx));
+          y = Math.max(2, Math.min(h - 3, y + d.dy));
+        }
+
+        if (rooms.length < 2) {
+          this.carveRect(grid, 3, 3, 4, 4, 1);
+          rooms.push({ id: 'R1', x: 3, y: 3, w: 4, h: 4, cx: 5, cy: 5, type: 'Habitación normal', name: 'Entrada de Galería' });
+          this.carveRect(grid, w - 8, h - 8, 4, 4, 1);
+          rooms.push({ id: 'R2', x: w - 8, y: h - 8, w: 4, h: 4, cx: w - 6, cy: h - 6, type: 'Sala del jefe final', name: 'Cámara Profunda' });
+        }
+
+        return { grid, rooms };
+      },
+
+      // Algoritmo 5: Cellular Automata (Cavernas Orgánicas)
+      runCellularAutomata(w, h, config, rng) {
+        let grid = this.createEmptyGrid(w, h, 0);
+        for (let y = 2; y < h - 2; y++) {
+          for (let x = 2; x < w - 2; x++) {
+            grid[y][x] = rng.chance(0.46) ? 1 : 0;
+          }
+        }
+
+        for (let iter = 0; iter < 4; iter++) {
+          const next = this.createEmptyGrid(w, h, 0);
+          for (let y = 1; y < h - 1; y++) {
+            for (let x = 1; x < w - 1; x++) {
+              let neighbors = 0;
+              for (let dy = -1; dy <= 1; dy++) {
+                for (let dx = -1; dx <= 1; dx++) {
+                  if (dx === 0 && dy === 0) continue;
+                  if (grid[y + dy][x + dx] > 0) neighbors++;
+                }
+              }
+              next[y][x] = neighbors >= 4 ? 1 : 0;
+            }
+          }
+          grid = next;
+        }
+
+        // Identificar puntos amplios como "salas" de caverna
+        const rooms = [];
+        const desired = Math.max(4, Math.min(10, parseInt(config.roomsCount) || 6));
+        let tries = 0;
+        while (rooms.length < desired && tries < 200) {
+          tries++;
+          const rx = rng.int(3, w - 7);
+          const ry = rng.int(3, h - 7);
+          if (grid[ry + 1][rx + 1] > 0) {
+            this.carveRect(grid, rx, ry, 4, 4, 1);
+            rooms.push({
+              id: `R${rooms.length + 1}`,
+              x: rx, y: ry, w: 4, h: 4,
+              cx: rx + 2, cy: ry + 2,
+              type: 'Habitación normal',
+              name: `Bóveda Natural ${rooms.length + 1}`
+            });
+          }
+        }
+
+        if (rooms.length < 2) {
+          this.carveRect(grid, 3, 3, 4, 4, 1);
+          rooms.push({ id: 'R1', x: 3, y: 3, w: 4, h: 4, cx: 5, cy: 5, type: 'Habitación normal', name: 'Boca de Cueva' });
+          this.carveRect(grid, w - 8, h - 8, 4, 4, 1);
+          rooms.push({ id: 'R2', x: w - 8, y: h - 8, w: 4, h: 4, cx: w - 6, cy: h - 6, type: 'Sala del jefe final', name: 'Nido Abisal' });
+        }
+
+        for (let i = 1; i < rooms.length; i++) {
+          this.carveLCorridor(grid, rooms[i - 1].cx, rooms[i - 1].cy, rooms[i].cx, rooms[i].cy, 2);
+        }
+
+        return { grid, rooms };
+      },
+
+      carveRect(grid, x, y, w, h, val = 1) {
+        for (let j = y; j < y + h; j++) {
+          for (let i = x; i < x + w; i++) {
+            if (grid[j] && grid[j][i] !== undefined) grid[j][i] = val;
+          }
+        }
+      },
+
+      carveLCorridor(grid, x1, y1, x2, y2, val = 2) {
+        let cx = x1, cy = y1;
+        while (cx !== x2) {
+          if (grid[cy] && grid[cy][cx] === 0) grid[cy][cx] = val;
+          cx += cx < x2 ? 1 : -1;
+        }
+        while (cy !== y2) {
+          if (grid[cy] && grid[cy][cx] === 0) grid[cy][cx] = val;
+          cy += cy < y2 ? 1 : -1;
+        }
+        if (grid[cy] && grid[cy][cx] === 0) grid[cy][cx] = val;
+      },
+
+      tryAddSecretRoom(grid, rooms, w, h, rng) {
+        for (let attempt = 0; attempt < 40; attempt++) {
+          const rw = 3, rh = 3;
+          const rx = rng.int(2, w - rw - 2);
+          const ry = rng.int(2, h - rh - 2);
+          let clear = true;
+          for (let y = ry - 1; y <= ry + rh; y++) {
+            for (let x = rx - 1; x <= rx + rw; x++) {
+              if (grid[y][x] !== 0) clear = false;
+            }
+          }
+          if (clear) {
+            this.carveRect(grid, rx, ry, rw, rh, 5);
+            const secretRoom = {
+              id: `R${rooms.length + 1}`,
+              x: rx, y: ry, w: rw, h: rh,
+              cx: rx + 1, cy: ry + 1,
+              type: 'Sala secreta',
+              name: 'Cámara Secreta Sellada'
+            };
+            // Conectar con la primera sala y poner puerta secreta
+            const target = rooms[0];
+            this.carveLCorridor(grid, secretRoom.cx, secretRoom.cy, target.cx, target.cy, 2);
+            grid[secretRoom.cy][secretRoom.cx + (target.cx > secretRoom.cx ? 1 : -1)] = 4;
+            rooms.push(secretRoom);
+            break;
+          }
+        }
+      },
+
+      assignRoomSemantics(rooms, floorIndex, config, rng) {
+        if (rooms.length === 0) return;
+        rooms[0].type = 'Habitación normal';
+        rooms[0].name = 'Vestíbulo de Entrada';
+
+        if (rooms.length > 1) {
+          const last = rooms[rooms.length - 1];
+          const isFinalFloor = (floorIndex + 1) === parseInt(config.floors);
+          last.type = isFinalFloor ? 'Sala del jefe final' : 'Santuario';
+          last.name = isFinalFloor ? 'Trono del Jefe Final' : 'Cámara del Descenso';
+        }
+
+        const specialPool = [
+          'Sala del tesoro', 'Sala de comerciantes', 'Sala de descanso',
+          'Sala de trampas', 'Biblioteca', 'Cripta', 'Santuario', 'Cárcel', 'Sala de teletransportación'
+        ];
+
+        for (let i = 1; i < rooms.length - 1; i++) {
+          if (rooms[i].type === 'Sala secreta') continue;
+          if (i <= (parseInt(config.specialRooms) || 2)) {
+            const picked = rng.pick(specialPool);
+            rooms[i].type = picked;
+            rooms[i].name = `${picked} #${i}`;
+          } else {
+            const area = rooms[i].w * rooms[i].h;
+            rooms[i].type = area >= 20 ? 'Habitación grande' : (area <= 9 ? 'Habitación pequeña' : 'Habitación normal');
+            rooms[i].name = `${rooms[i].type} #${i}`;
+          }
+        }
+      },
+
+      placeDoors(grid, rooms, w, h, rng) {
+        for (const r of rooms) {
+          if (r.type === 'Sala secreta') continue;
+          for (let x = r.x; x < r.x + r.w; x++) {
+            if (r.y - 1 > 0 && grid[r.y - 1][x] === 2 && rng.chance(0.45)) grid[r.y - 1][x] = 3;
+            if (r.y + r.h < h - 1 && grid[r.y + r.h][x] === 2 && rng.chance(0.45)) grid[r.y + r.h][x] = 3;
+          }
+          for (let y = r.y; y < r.y + r.h; y++) {
+            if (r.x - 1 > 0 && grid[y][r.x - 1] === 2 && rng.chance(0.45)) grid[y][r.x - 1] = 3;
+            if (r.x + r.w < w - 1 && grid[y][r.x + r.w] === 2 && rng.chance(0.45)) grid[y][r.x + r.w] = 3;
+          }
+        }
+      },
+
+      findFirstWalkable(grid, w, h) {
+        for (let y = 1; y < h - 1; y++) {
+          for (let x = 1; x < w - 1; x++) {
+            if (grid[y][x] > 0) return { x, y };
+          }
+        }
+        grid[2][2] = 1;
+        return { x: 2, y: 2 };
+      },
+
+      findFarthestWalkable(grid, w, h, start) {
+        let best = { x: start.x, y: start.y };
+        let maxDist = -1;
+        for (let y = 1; y < h - 1; y++) {
+          for (let x = 1; x < w - 1; x++) {
+            if (grid[y][x] > 0) {
+              const d = Math.abs(x - start.x) + Math.abs(y - start.y);
+              if (d > maxDist) {
+                maxDist = d;
+                best = { x, y };
+              }
+            }
+          }
+        }
+        return best;
+      },
+
+      // Validador BFS de camino más corto entre entrada y salida
+      findShortestPathBFS(grid, w, h, start, end) {
+        if (!start || !end) return null;
+        const visited = Array.from({ length: h }, () => Array(w).fill(false));
+        const parent = Array.from({ length: h }, () => Array(w).fill(null));
+        const queue = [{ x: start.x, y: start.y }];
+        visited[start.y][start.x] = true;
+
+        const dirs = [
+          { dx: 0, dy: -1 }, { dx: 1, dy: 0 },
+          { dx: 0, dy: 1 }, { dx: -1, dy: 0 }
+        ];
+
+        while (queue.length > 0) {
+          const curr = queue.shift();
+          if (curr.x === end.x && curr.y === end.y) {
+            const path = [];
+            let step = curr;
+            while (step) {
+              path.push(step);
+              step = parent[step.y][step.x];
+            }
+            return path.reverse();
+          }
+          for (const d of dirs) {
+            const nx = curr.x + d.dx;
+            const ny = curr.y + d.dy;
+            if (nx >= 0 && nx < w && ny >= 0 && ny < h && !visited[ny][nx] && grid[ny][nx] > 0) {
+              visited[ny][nx] = true;
+              parent[ny][nx] = curr;
+              queue.push({ x: nx, y: ny });
+            }
+          }
+        }
+        return null;
+      },
+
+      populateEntities(grid, rooms, w, h, startPos, endPos, floorIndex, config, rng) {
+        const entities = [];
+        const occupied = new Set();
+        const key = (x, y) => `${x},${y}`;
+
+        // 1. Entrada (Escalera Arriba)
+        entities.push({
+          id: `ent_up_${floorIndex}`,
+          x: startPos.x,
+          y: startPos.y,
+          category: 'stairs',
+          subtype: 'stairs_up',
+          code: 'IN',
+          name: floorIndex === 0 ? 'Entrada Principal' : `Escalera desde Planta ${floorIndex}`,
+          targetFloor: floorIndex > 0 ? floorIndex : 1,
+          desc: floorIndex === 0 ? 'Punto de inicio de la aventura.' : `Conecta con Planta ${floorIndex}`
+        });
+        occupied.add(key(startPos.x, startPos.y));
+
+        // 2. Salida (Escalera Abajo o Altar Final)
+        const totalFloors = parseInt(config.floors) || 5;
+        entities.push({
+          id: `ent_down_${floorIndex}`,
+          x: endPos.x,
+          y: endPos.y,
+          category: 'stairs',
+          subtype: 'stairs_down',
+          code: 'OUT',
+          name: floorIndex + 1 < totalFloors ? `Escalera a Planta ${floorIndex + 2}` : 'Altar de la Victoria',
+          targetFloor: floorIndex + 1 < totalFloors ? floorIndex + 2 : totalFloors,
+          desc: floorIndex + 1 < totalFloors ? `Desciende a la Planta ${floorIndex + 2}` : 'Objetivo final del cuaderno.'
+        });
+        occupied.add(key(endPos.x, endPos.y));
+
+        // Recopilar celdas transitables libres
+        const walkable = [];
+        for (let y = 1; y < h - 1; y++) {
+          for (let x = 1; x < w - 1; x++) {
+            if (grid[y][x] > 0 && !occupied.has(key(x, y))) {
+              walkable.push({ x, y, tile: grid[y][x] });
+            }
+          }
+        }
+
+        const takeSpot = (preferRoom = true) => {
+          const candidates = walkable.filter(c => !occupied.has(key(c.x, c.y)) && (!preferRoom || c.tile === 1 || c.tile === 5));
+          const pool = candidates.length > 0 ? candidates : walkable.filter(c => !occupied.has(key(c.x, c.y)));
+          if (pool.length === 0) return null;
+          const chosen = rng.pick(pool);
+          occupied.add(key(chosen.x, chosen.y));
+          return chosen;
+        };
+
+        // Si es la última planta, colocar Jefe cerca de la salida
+        if (floorIndex + 1 === totalFloors) {
+          const bossSpot = takeSpot(true);
+          if (bossSpot) {
+            const bossTemplate = CATALOG.enemies.find(e => e.id === 'boss');
+            entities.push({
+              id: `ent_boss_${floorIndex}`,
+              x: bossSpot.x,
+              y: bossSpot.y,
+              category: 'enemy',
+              subtype: bossTemplate.id,
+              code: bossTemplate.code,
+              name: bossTemplate.name,
+              hp: bossTemplate.hp,
+              dmg: bossTemplate.dmg,
+              reward: bossTemplate.reward,
+              desc: bossTemplate.desc
+            });
+          }
+        }
+
+        // 3. Enemigos escalados por dificultad
+        const maxDiff = Math.min(5, Math.max(1, parseInt(config.difficulty) + Math.floor(floorIndex / 2)));
+        const validEnemies = CATALOG.enemies.filter(e => e.level <= maxDiff && e.id !== 'boss');
+        const enemyCount = parseInt(config.enemiesCount) || 6;
+
+        for (let i = 0; i < enemyCount; i++) {
+          const spot = takeSpot(true);
+          if (!spot) break;
+          const tpl = rng.pick(validEnemies) || CATALOG.enemies[0];
+          entities.push({
+            id: `ent_e_${floorIndex}_${i}`,
+            x: spot.x,
+            y: spot.y,
+            category: 'enemy',
+            subtype: tpl.id,
+            code: tpl.code,
+            name: tpl.name,
+            hp: tpl.hp,
+            dmg: tpl.dmg,
+            reward: tpl.reward,
+            desc: tpl.desc
+          });
+        }
+
+        // 4. Tesoros
+        const treasureCount = parseInt(config.treasuresCount) || 5;
+        for (let i = 0; i < treasureCount; i++) {
+          const spot = takeSpot(true);
+          if (!spot) break;
+          const tpl = rng.pick(CATALOG.treasures);
+          entities.push({
+            id: `ent_t_${floorIndex}_${i}`,
+            x: spot.x,
+            y: spot.y,
+            category: 'treasure',
+            subtype: tpl.id,
+            code: tpl.code,
+            name: tpl.name,
+            reward: tpl.value,
+            desc: tpl.desc
+          });
+        }
+
+        // 5. Trampas
+        const trapCount = parseInt(config.trapsCount) || 4;
+        for (let i = 0; i < trapCount; i++) {
+          const spot = takeSpot(false);
+          if (!spot) break;
+          const tpl = rng.pick(CATALOG.traps);
+          entities.push({
+            id: `ent_x_${floorIndex}_${i}`,
+            x: spot.x,
+            y: spot.y,
+            category: 'trap',
+            subtype: tpl.id,
+            code: tpl.code,
+            name: tpl.name,
+            dmg: tpl.dmg,
+            desc: tpl.desc
+          });
+        }
+
+        // 6. Elementos Ambientales (Fuentes, Altares, Teletransportadores)
+        const featureCount = Math.max(2, parseInt(config.specialRooms) || 2);
+        for (let i = 0; i < featureCount; i++) {
+          const spot = takeSpot(true);
+          if (!spot) break;
+          const tpl = rng.pick(CATALOG.features);
+          entities.push({
+            id: `ent_f_${floorIndex}_${i}`,
+            x: spot.x,
+            y: spot.y,
+            category: 'feature',
+            subtype: tpl.id,
+            code: tpl.code,
+            name: tpl.name,
+            desc: tpl.desc
+          });
+        }
+
+        return entities;
+      }
+    };
+
+    /*************************************************************************
+     * 4. ALMACENAMIENTO LOCAL: INDEXEDDB + LOCALSTORAGE
+     *************************************************************************/
+    const StorageManager = {
+      dbName: 'DungeonForgeDB',
+      storeName: 'projects',
+
+      openDB() {
+        return new Promise((resolve, reject) => {
+          const req = indexedDB.open(this.dbName, 1);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(this.storeName)) {
+              db.createObjectStore(this.storeName, { keyPath: 'id' });
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      },
+
+      async saveProject(project) {
+        project.updatedAt = new Date().toISOString();
+        const db = await this.openDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(this.storeName, 'readwrite');
+          tx.objectStore(this.storeName).put(project);
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => reject(tx.error);
+        });
+      },
+
+      async getAllProjects() {
+        const db = await this.openDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(this.storeName, 'readonly');
+          const req = tx.objectStore(this.storeName).getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => reject(req.error);
+        });
+      },
+
+      async deleteProject(id) {
+        const db = await this.openDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(this.storeName, 'readwrite');
+          tx.objectStore(this.storeName).delete(id);
+          tx.oncomplete = () => resolve(true);
+          tx.onerror = () => reject(tx.error);
+        });
+      }
+    };
+
+    /*************************************************************************
+     * 5. ESTADO GLOBAL Y CONTROLADOR PRINCIPAL DE LA APLICACIÓN
+     *************************************************************************/
+    const App = {
+      activeTab: 'dashboard',
+      activeFloorIndex: 0,
+      activeNotebookPageIndex: 0,
+      editorTool: 'select',
+      cellSize: 24,
+      isPainting: false,
+      selectedCell: null, // {x, y}
+      undoStack: [],
+      redoStack: [],
+
+      project: null,
+
+      async init() {
+        this.populateThemeSelects();
+        this.updateCatalogSubpalette();
+
+        const savedList = await StorageManager.getAllProjects();
+        if (savedList.length > 0) {
+          savedList.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+          this.project = savedList[0];
+        } else {
+          this.project = this.createDefaultProject('medieval', 'FORGE-2026-ALPHA');
+          await StorageManager.saveProject(this.project);
+        }
+
+        this.syncUIFromProject();
+        this.setupCanvasEvents();
+        this.setEditorTool('select');
+        this.setTab('dashboard');
+        lucide.createIcons();
+      },
+
+      createDefaultProject(themeId = 'medieval', seed = 'FORGE-2026-ALPHA') {
+        const theme = CATALOG.themes.find(t => t.id === themeId) || CATALOG.themes[0];
+        const config = {
+          seed,
+          theme: theme.id,
+          algorithm: 'auto',
+          floors: 5,
+          width: 26,
+          height: 26,
+          roomsCount: 9,
+          complexity: 3,
+          difficulty: 3,
+          enemiesCount: 7,
+          treasuresCount: 5,
+          trapsCount: 4,
+          specialRooms: 2,
+          secretRooms: true
+        };
+
+        const floors = [];
+        for (let i = 0; i < config.floors; i++) {
+          floors.push(ProceduralEngine.generateFloor(config, i));
+        }
+
+        const proj = {
+          id: 'proj_' + Date.now(),
+          name: `${theme.name} — Crónicas`,
+          description: theme.desc,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          config,
+          floors,
+          character: {
+            name: 'Kaelen Vane',
+            className: 'Explorador de Criptas',
+            hp: 20,
+            atk: 3,
+            def: 2,
+            spd: 1,
+            gold: 30,
+            items: 'Antorcha Eterna, Cuerda (15m), Poción Curativa (+6 HP), Llave de Bronce'
+          },
+          rules: {
+            dice: '1d6',
+            combat: '1d6 + ATK vs DEF Enemigo',
+            summary:
+              '1. MOVIMIENTO: En cada turno lanza 1d6 y suma tu Velocidad. Avanza ortogonalmente por casillas de suelo o pasillo marcándolas con lápiz.\n' +
+              '2. PUERTAS: Las puertas normales se abren al pasar. Las Puertas Secretas (S) requieren obtener 5-6 en 1d6 al buscar en salas adyacentes.\n' +
+              '3. COMBATE: Al entrar en la casilla de un Enemigo (E1..E9), lanza 1d6 + ATK. Si igualas o superas su Nivel + 3, le infliges tu ATK en daño; de lo contrario sufres su Daño menos tu DEF.\n' +
+              '4. OBJETIVO DE PLANTA: Localiza la escalera de descenso (OUT) para bajar al siguiente nivel hasta derrotar al Jefe Final (JB).'
+          },
+          bestiary: JSON.parse(JSON.stringify(CATALOG.enemies)),
+          pages: []
+        };
+
+        proj.pages = this.buildDefaultPagesForProject(proj);
+        return proj;
+      },
+
+      buildDefaultPagesForProject(proj) {
+        const pages = [];
+        pages.push({
+          id: 'p_cover_' + Date.now(),
+          type: 'cover',
+          title: proj.name.toUpperCase(),
+          subtitle: 'Cuaderno Procedural de Exploración de Mazmorras',
+          description: `Semilla de Generación: ${proj.config.seed} • ${proj.floors.length} Plantas Conectadas`
+        });
+        pages.push({
+          id: 'p_rules_' + Date.now(),
+          type: 'rules',
+          title: 'REGLAS DE EXPLORACIÓN Y COMBATE',
+          subtitle: 'Sistema Solitario Roll & Write',
+          description: proj.rules.summary
+        });
+        pages.push({
+          id: 'p_char_' + Date.now(),
+          type: 'character',
+          title: 'FICHA DE PERSONAJE E INVENTARIO',
+          subtitle: `${proj.character.name} — ${proj.character.className}`,
+          description: 'Registra aquí tus puntos de vida, monedas de oro, llaves y equipo hallado.'
+        });
+
+        proj.floors.forEach((f, idx) => {
+          pages.push({
+            id: `p_map_${idx}_${Date.now()}`,
+            type: 'map',
+            floorIndex: idx,
+            title: f.name,
+            subtitle: `Planta ${f.floorNumber} • Algoritmo: ${f.algorithm.toUpperCase()} • Dificultad ${f.difficulty}/5`,
+            description: f.objective
+          });
+        });
+
+        pages.push({
+          id: 'p_bestiary_' + Date.now(),
+          type: 'bestiary',
+          title: 'BESTIARIO Y TABLA DE ENEMIGOS',
+          subtitle: 'Criaturas que habitan las profundidades',
+          description: 'Consulta las estadísticas de cada código de enemigo presente en los mapas.'
+        });
+
+        pages.push({
+          id: 'p_treasures_' + Date.now(),
+          type: 'treasures',
+          title: 'TESOROS, TRAMPAS Y EVENTOS',
+          subtitle: 'Recompensas y peligros ambientales',
+          description: 'Tabla de referencia para cofres, reliquias, altares y mecanismos.'
+        });
+
+        pages.push({
+          id: 'p_tracker_' + Date.now(),
+          type: 'tracker',
+          title: 'REGISTRO DE PROGRESO DE LA AVENTURA',
+          subtitle: 'Diario de plantas superadas y jefes abatidos',
+          description: 'Marca cada hito completado durante tu incursión.'
+        });
+
+        pages.push({
+          id: 'p_notes_' + Date.now(),
+          type: 'notes',
+          title: 'DIARIO Y NOTAS DEL CARTÓGRAFO',
+          subtitle: 'Espacio para acertijos, claves y bocetos',
+          description: ''
+        });
+
+        return pages;
+      },
+
+      setTab(tabId) {
+        this.activeTab = tabId;
+        const tabs = ['dashboard', 'generator', 'editor', 'notebook', 'rules', 'export'];
+        tabs.forEach(t => {
+          const view = document.getElementById(`view-${t}`);
+          const btn = document.getElementById(`tab-btn-${t}`);
+          if (t === tabId) {
+            view.classList.remove('hidden');
+            btn.className = 'tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-semibold bg-amber-500 text-forge-950 shadow';
+          } else {
+            view.classList.add('hidden');
+            btn.className = 'tab-btn flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-medium text-gray-300 hover:text-white hover:bg-forge-800';
+          }
+        });
+
+        if (tabId === 'dashboard') this.renderDashboard();
+        if (tabId === 'generator') this.renderGeneratorPreview();
+        if (tabId === 'editor') {
+          this.populateFloorSelector();
+          this.renderEditorCanvas();
+          this.renderInspector();
+        }
+        if (tabId === 'notebook') this.renderNotebookBuilder();
+        if (tabId === 'rules') this.renderRulesView();
+        if (tabId === 'export') this.updateExportPreview();
+        lucide.createIcons();
+      },
+
+      syncUIFromProject() {
+        const p = this.project;
+        document.getElementById('project-title-input').value = p.name;
+        document.getElementById('nav-page-count').innerText = p.pages.length;
+
+        // Generador
+        document.getElementById('gen-seed').value = p.config.seed;
+        document.getElementById('gen-theme').value = p.config.theme;
+        document.getElementById('gen-algorithm').value = p.config.algorithm;
+        document.getElementById('gen-floors').value = p.config.floors;
+        document.getElementById('gen-width').value = p.config.width;
+        document.getElementById('gen-height').value = p.config.height;
+        document.getElementById('gen-rooms').value = p.config.roomsCount;
+        document.getElementById('lbl-gen-rooms').innerText = p.config.roomsCount;
+        document.getElementById('gen-complexity').value = p.config.complexity;
+        document.getElementById('lbl-gen-complexity').innerText = 'Nivel ' + p.config.complexity;
+        document.getElementById('gen-difficulty').value = p.config.difficulty;
+        document.getElementById('lbl-gen-difficulty').innerText = 'Nivel ' + p.config.difficulty;
+        document.getElementById('gen-enemies').value = p.config.enemiesCount;
+        document.getElementById('gen-treasures').value = p.config.treasuresCount;
+        document.getElementById('gen-traps').value = p.config.trapsCount;
+        document.getElementById('gen-special').value = p.config.specialRooms;
+        document.getElementById('gen-secret-rooms').checked = !!p.config.secretRooms;
+      },
+
+      readGeneratorConfigFromUI() {
+        this.project.config = {
+          seed: document.getElementById('gen-seed').value.trim() || 'FORGE-SEED',
+          theme: document.getElementById('gen-theme').value,
+          algorithm: document.getElementById('gen-algorithm').value,
+          floors: Math.max(1, Math.min(15, parseInt(document.getElementById('gen-floors').value) || 5)),
+          width: Math.max(16, Math.min(50, parseInt(document.getElementById('gen-width').value) || 26)),
+          height: Math.max(16, Math.min(50, parseInt(document.getElementById('gen-height').value) || 26)),
+          roomsCount: parseInt(document.getElementById('gen-rooms').value) || 8,
+          complexity: parseInt(document.getElementById('gen-complexity').value) || 3,
+          difficulty: parseInt(document.getElementById('gen-difficulty').value) || 3,
+          enemiesCount: parseInt(document.getElementById('gen-enemies').value) || 6,
+          treasuresCount: parseInt(document.getElementById('gen-treasures').value) || 5,
+          trapsCount: parseInt(document.getElementById('gen-traps').value) || 4,
+          specialRooms: parseInt(document.getElementById('gen-special').value) || 2,
+          secretRooms: document.getElementById('gen-secret-rooms').checked
+        };
+      },
+
+      async triggerAutosave() {
+        document.getElementById('nav-page-count').innerText = this.project.pages.length;
+        await StorageManager.saveProject(this.project);
+        const badge = document.getElementById('autosave-badge');
+        badge.innerHTML = `<i data-lucide="check-circle-2" class="w-3 h-3"></i> Autoguardado`;
+        lucide.createIcons();
+      },
+
+      showToast(msg) {
+        const t = document.getElementById('toast-notification');
+        document.getElementById('toast-message').innerText = msg;
+        t.classList.remove('hidden');
+        clearTimeout(this._toastTimer);
+        this._toastTimer = setTimeout(() => t.classList.add('hidden'), 3200);
+      },
+
+      /***********************************************************************
+       * DASHBOARD Y PLANTILLAS
+       ***********************************************************************/
+      populateThemeSelects() {
+        const sel = document.getElementById('gen-theme');
+        sel.innerHTML = CATALOG.themes.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+      },
+
+      async renderDashboard() {
+        // Renderizar tarjetas de plantillas
+        const grid = document.getElementById('dashboard-templates-grid');
+        grid.innerHTML = CATALOG.themes.map(t => `
+          <div class="bg-forge-900 border border-forge-700 hover:border-amber-500/60 rounded-xl p-4 flex flex-col justify-between transition group">
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="font-bold text-white group-hover:text-amber-400 transition">${t.name}</span>
+                <span class="text-[10px] font-mono uppercase px-2 py-0.5 rounded bg-forge-800 text-amber-300 border border-forge-600">${t.algo}</span>
+              </div>
+              <p class="text-xs text-gray-400 leading-relaxed mb-4">${t.desc}</p>
+            </div>
+            <button onclick="App.applyTemplate('${t.id}')" class="w-full py-1.5 rounded bg-forge-800 group-hover:bg-amber-500 group-hover:text-forge-950 text-gray-200 font-semibold text-xs transition">
+              Usar Plantilla (5 Plantas)
+            </button>
+          </div>
+        `).join('');
+
+        // Proyectos guardados
+        const projects = await StorageManager.getAllProjects();
+        projects.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+        const listEl = document.getElementById('saved-projects-list');
+        if (projects.length === 0) {
+          listEl.innerHTML = `<p class="text-xs text-gray-500">No hay proyectos guardados aún.</p>`;
+        } else {
+          listEl.innerHTML = projects.map(p => `
+            <div class="flex items-center justify-between p-3 rounded-lg bg-forge-950 border ${p.id === this.project.id ? 'border-amber-500/60' : 'border-forge-700'}">
+              <div>
+                <div class="font-semibold text-white text-xs flex items-center gap-2">
+                  ${p.name}
+                  ${p.id === this.project.id ? '<span class="text-[10px] px-1.5 py-0.2 bg-amber-500/20 text-amber-300 rounded">Activo</span>' : ''}
+                </div>
+                <div class="text-[11px] text-gray-400 font-mono">
+                  Semilla: ${p.config.seed} • ${p.floors.length} plantas • ${p.pages.length} páginas
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button onclick="App.loadSavedProject('${p.id}')" class="px-2.5 py-1 rounded bg-forge-800 hover:bg-forge-700 text-xs text-amber-300 border border-forge-600">Abrir</button>
+                <button onclick="App.deleteSavedProject('${p.id}')" class="p-1.5 rounded bg-forge-800 hover:bg-rose-500/20 text-rose-400 border border-forge-600">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        // Estadísticas del proyecto activo
+        const p = this.project;
+        const totalRooms = p.floors.reduce((acc, f) => acc + f.rooms.length, 0);
+        const totalEntities = p.floors.reduce((acc, f) => acc + f.entities.length, 0);
+        document.getElementById('active-project-stats').innerHTML = `
+          <div class="flex justify-between py-1 border-b border-forge-800"><span class="text-gray-400">Nombre:</span><span class="font-semibold text-white">${p.name}</span></div>
+          <div class="flex justify-between py-1 border-b border-forge-800"><span class="text-gray-400">Semilla Determinista:</span><span class="font-mono text-amber-400">${p.config.seed}</span></div>
+          <div class="flex justify-between py-1 border-b border-forge-800"><span class="text-gray-400">Plantas Conectadas:</span><span class="font-mono text-white">${p.floors.length} niveles</span></div>
+          <div class="flex justify-between py-1 border-b border-forge-800"><span class="text-gray-400">Habitaciones Totales:</span><span class="font-mono text-white">${totalRooms} cámaras</span></div>
+          <div class="flex justify-between py-1 border-b border-forge-800"><span class="text-gray-400">Entidades Activas:</span><span class="font-mono text-white">${totalEntities} elementos</span></div>
+          <div class="flex justify-between py-1"><span class="text-gray-400">Páginas Maquetadas:</span><span class="font-mono text-emerald-400">${p.pages.length} páginas</span></div>
+        `;
+        lucide.createIcons();
+      },
+
+      async applyTemplate(themeId) {
+        const seed = `${themeId.toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
+        this.project = this.createDefaultProject(themeId, seed);
+        this.activeFloorIndex = 0;
+        this.syncUIFromProject();
+        await this.triggerAutosave();
+        this.setTab('generator');
+        this.showToast(`Plantilla "${this.project.name}" generada con 5 plantas.`);
+      },
+
+      async createNewProjectWizard() {
+        const seed = `FORGE-${Math.floor(10000 + Math.random() * 90000)}`;
+        this.project = this.createDefaultProject('medieval', seed);
+        this.activeFloorIndex = 0;
+        this.syncUIFromProject();
+        await this.triggerAutosave();
+        this.renderDashboard();
+        this.showToast('Nuevo cuaderno de 5 plantas creado.');
+      },
+
+      async loadSavedProject(id) {
+        const all = await StorageManager.getAllProjects();
+        const found = all.find(p => p.id === id);
+        if (found) {
+          this.project = found;
+          this.activeFloorIndex = 0;
+          this.syncUIFromProject();
+          this.renderDashboard();
+          this.showToast(`Proyecto "${found.name}" cargado.`);
+        }
+      },
+
+      async deleteSavedProject(id) {
+        const all = await StorageManager.getAllProjects();
+        if (all.length <= 1) {
+          this.showToast('Debes conservar al menos un proyecto activo.');
+          return;
+        }
+        if (!confirm('¿Eliminar este proyecto permanentemente de IndexedDB?')) return;
+        await StorageManager.deleteProject(id);
+        if (this.project.id === id) {
+          const remaining = await StorageManager.getAllProjects();
+          this.project = remaining[0];
+          this.syncUIFromProject();
+        }
+        this.renderDashboard();
+        this.showToast('Proyecto eliminado.');
+      },
+
+      async duplicateCurrentProject() {
+        const copy = JSON.parse(JSON.stringify(this.project));
+        copy.id = 'proj_' + Date.now();
+        copy.name = this.project.name + ' (Copia)';
+        copy.updatedAt = new Date().toISOString();
+        this.project = copy;
+        this.syncUIFromProject();
+        await this.triggerAutosave();
+        this.renderDashboard();
+        this.showToast('Proyecto duplicado correctamente.');
+      },
+
+      updateProjectTitle(val) {
+        this.project.name = val.trim() || 'Mazmorra Sin Nombre';
+        this.triggerAutosave();
+      },
+
+      /***********************************************************************
+       * VISTA GENERADOR PROCEDURAL
+       ***********************************************************************/
+      randomizeSeed() {
+        const prefixes = ['CRYPT', 'ABYSS', 'RUNE', 'IRON', 'DRAGON', 'TORCH', 'OBSIDIAN'];
+        const p = prefixes[Math.floor(Math.random() * prefixes.length)];
+        const num = Math.floor(1000 + Math.random() * 9000);
+        document.getElementById('gen-seed').value = `${p}-${num}`;
+      },
+
+      copySeed() {
+        const val = document.getElementById('gen-seed').value;
+        navigator.clipboard?.writeText(val);
+        this.showToast(`Semilla "${val}" copiada al portapapeles.`);
+      },
+
+      async generateAllFloorsFromUI() {
+        this.readGeneratorConfigFromUI();
+        const floors = [];
+        for (let i = 0; i < this.project.config.floors; i++) {
+          floors.push(ProceduralEngine.generateFloor(this.project.config, i));
+        }
+        this.project.floors = floors;
+        this.activeFloorIndex = 0;
+        this.project.pages = this.buildDefaultPagesForProject(this.project);
+        await this.triggerAutosave();
+        this.renderGeneratorPreview();
+        this.showToast(`Generadas ${floors.length} plantas conectadas con semilla "${this.project.config.seed}".`);
+      },
+
+      async regenerateActiveFloorOnly() {
+        this.readGeneratorConfigFromUI();
+        const idx = this.activeFloorIndex;
+        this.project.floors[idx] = ProceduralEngine.generateFloor(this.project.config, idx);
+        await this.triggerAutosave();
+        this.renderGeneratorPreview();
+        this.showToast(`Planta ${idx + 1} regenerada.`);
+      },
+
+      renderGeneratorPreview() {
+        const container = document.getElementById('generator-floors-preview');
+        container.innerHTML = this.project.floors.map((floor, idx) => `
+          <div class="bg-forge-900 border ${idx === this.activeFloorIndex ? 'border-amber-500' : 'border-forge-700'} rounded-xl p-4 flex flex-col justify-between space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="text-xs font-mono text-amber-400 uppercase">Planta ${floor.floorNumber} • ${floor.algorithm}</span>
+                <h4 class="font-bold text-white text-sm">${floor.name}</h4>
+              </div>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono ${floor.isConnected ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-400'}">
+                ${floor.isConnected ? '✓ Conectada (' + floor.validPath.length + ' pasos)' : 'Sin ruta'}
+              </span>
+            </div>
+
+            <div class="bg-forge-950 border border-forge-800 rounded-lg p-2 flex items-center justify-center">
+              <canvas id="mini-canvas-${idx}" width="220" height="220"></canvas>
+            </div>
+
+            <div class="grid grid-cols-3 gap-1 text-[11px] text-gray-400 font-mono bg-forge-950 p-2 rounded border border-forge-800">
+              <div>Salas: <span class="text-white">${floor.rooms.length}</span></div>
+              <div>Enemigos: <span class="text-rose-400">${floor.entities.filter(e => e.category === 'enemy').length}</span></div>
+              <div>Tesoros: <span class="text-amber-400">${floor.entities.filter(e => e.category === 'treasure').length}</span></div>
+            </div>
+
+            <button onclick="App.selectFloor(${idx}); App.setTab('editor');" class="w-full py-1.5 rounded bg-forge-800 hover:bg-amber-500 hover:text-forge-950 text-gray-200 font-medium text-xs transition">
+              Abrir Planta ${floor.floorNumber} en Editor Visual
+            </button>
+          </div>
+        `).join('');
+
+        // Pintar mini-mapas
+        this.project.floors.forEach((floor, idx) => {
+          const c = document.getElementById(`mini-canvas-${idx}`);
+          if (c) this.drawFloorOnCanvas(c, floor, { showGrid: false, showPath: true, darkTheme: true });
+        });
+      },
+
+      /***********************************************************************
+       * VISTA EDITOR VISUAL INTERACTIVO
+       ***********************************************************************/
+      populateFloorSelector() {
+        const sel = document.getElementById('editor-floor-select');
+        sel.innerHTML = this.project.floors.map((f, idx) =>
+          `<option value="${idx}" ${idx === this.activeFloorIndex ? 'selected' : ''}>Planta ${f.floorNumber}: ${f.name}</option>`
+        ).join('');
+      },
+
+      selectFloor(idx) {
+        if (idx >= 0 && idx < this.project.floors.length) {
+          this.activeFloorIndex = idx;
+          this.selectedCell = null;
+          this.undoStack = [];
+          this.redoStack = [];
+          if (this.activeTab === 'editor') {
+            this.populateFloorSelector();
+            this.renderEditorCanvas();
+            this.renderInspector();
+          }
+        }
+      },
+
+      async addFloor() {
+        const newIdx = this.project.floors.length;
+        const newFloor = ProceduralEngine.generateFloor(this.project.config, newIdx);
+        this.project.floors.push(newFloor);
+        this.project.config.floors = this.project.floors.length;
+        this.activeFloorIndex = newIdx;
+        await this.triggerAutosave();
+        this.populateFloorSelector();
+        this.renderEditorCanvas();
+        this.renderInspector();
+        this.showToast(`Planta ${newIdx + 1} añadida.`);
+      },
+
+      async deleteActiveFloor() {
+        if (this.project.floors.length <= 1) {
+          this.showToast('El proyecto debe tener al menos 1 planta.');
+          return;
+        }
+        this.project.floors.splice(this.activeFloorIndex, 1);
+        this.project.floors.forEach((f, i) => f.floorNumber = i + 1);
+        this.activeFloorIndex = Math.max(0, this.activeFloorIndex - 1);
+        await this.triggerAutosave();
+        this.populateFloorSelector();
+        this.renderEditorCanvas();
+        this.renderInspector();
+        this.showToast('Planta eliminada.');
+      },
+
+      setEditorTool(tool) {
+        this.editorTool = tool;
+        document.querySelectorAll('.editor-tool-btn').forEach(btn => {
+          if (btn.getAttribute('data-tool') === tool) {
+            btn.className = 'editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border border-amber-500 bg-amber-500/20 text-amber-300 text-xs font-semibold';
+          } else {
+            btn.className = 'editor-tool-btn flex items-center gap-2 px-2.5 py-2 rounded border border-forge-700 bg-forge-950 hover:bg-forge-800 text-gray-300 text-xs font-medium';
+          }
+        });
+        this.updateCatalogSubpalette();
+      },
+
+      updateCatalogSubpalette() {
+        const sel = document.getElementById('editor-catalog-item');
+        const desc = document.getElementById('editor-catalog-desc');
+        if (!sel) return;
+
+        let list = [];
+        if (this.editorTool === 'enemy') {
+          list = this.project ? this.project.bestiary : CATALOG.enemies;
+        } else if (this.editorTool === 'treasure') {
+          list = CATALOG.treasures;
+        } else if (this.editorTool === 'trap') {
+          list = CATALOG.traps;
+        } else if (this.editorTool === 'feature') {
+          list = CATALOG.features;
+        } else if (this.editorTool === 'stairs') {
+          list = [
+            { id: 'stairs_up', code: 'IN', name: 'Escalera de Subida / Entrada', desc: 'Conecta con la planta superior.' },
+            { id: 'stairs_down', code: 'OUT', name: 'Escalera de Bajada / Salida', desc: 'Conecta con la planta inferior.' }
+          ];
+        }
+
+        if (list.length > 0) {
+          sel.innerHTML = list.map(item => `<option value="${item.id}">${item.code} — ${item.name}</option>`).join('');
+          desc.innerText = list[0].desc || '';
+          sel.onchange = () => {
+            const found = list.find(i => i.id === sel.value);
+            desc.innerText = found ? found.desc : '';
+          };
+        } else {
+          sel.innerHTML = `<option value="">Pincel estructural activo</option>`;
+          desc.innerText = 'Haz clic o arrastra sobre la cuadrícula para modificar las celdas del mapa.';
+        }
+      },
+
+      setCellSize(px) {
+        this.cellSize = px;
+        document.getElementById('lbl-cell-size').innerText = px + 'px';
+        this.renderEditorCanvas();
+      },
+
+      pushUndoState() {
+        const floor = this.project.floors[this.activeFloorIndex];
+        this.undoStack.push(JSON.stringify({ grid: floor.grid, entities: floor.entities, rooms: floor.rooms }));
+        if (this.undoStack.length > 35) this.undoStack.shift();
+        this.redoStack = [];
+      },
+
+      undo() {
+        if (this.undoStack.length === 0) return;
+        const floor = this.project.floors[this.activeFloorIndex];
+        this.redoStack.push(JSON.stringify({ grid: floor.grid, entities: floor.entities, rooms: floor.rooms }));
+        const prev = JSON.parse(this.undoStack.pop());
+        floor.grid = prev.grid;
+        floor.entities = prev.entities;
+        floor.rooms = prev.rooms;
+        this.revalidateFloor(floor);
+        this.renderEditorCanvas();
+        this.renderInspector();
+      },
+
+      redo() {
+        if (this.redoStack.length === 0) return;
+        const floor = this.project.floors[this.activeFloorIndex];
+        this.undoStack.push(JSON.stringify({ grid: floor.grid, entities: floor.entities, rooms: floor.rooms }));
+        const next = JSON.parse(this.redoStack.pop());
+        floor.grid = next.grid;
+        floor.entities = next.entities;
+        floor.rooms = next.rooms;
+        this.revalidateFloor(floor);
+        this.renderEditorCanvas();
+        this.renderInspector();
+      },
+
+      setupCanvasEvents() {
+        const canvas = document.getElementById('dungeon-canvas');
+        const getCellFromEvent = (e) => {
+          const rect = canvas.getBoundingClientRect();
+          const x = Math.floor((e.clientX - rect.left) / this.cellSize);
+          const y = Math.floor((e.clientY - rect.top) / this.cellSize);
+          return { x, y };
+        };
+
+        canvas.addEventListener('mousedown', (e) => {
+          const floor = this.project.floors[this.activeFloorIndex];
+          const { x, y } = getCellFromEvent(e);
+          if (x < 0 || y < 0 || x >= floor.width || y >= floor.height) return;
+
+          if (this.editorTool === 'select') {
+            this.selectedCell = { x, y };
+            this.renderEditorCanvas();
+            this.renderInspector();
+            return;
+          }
+
+          this.pushUndoState();
+          this.isPainting = true;
+          this.applyToolAtCell(x, y, true);
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+          const floor = this.project.floors[this.activeFloorIndex];
+          if (!floor) return;
+          const { x, y } = getCellFromEvent(e);
+          if (x >= 0 && y >= 0 && x < floor.width && y < floor.height) {
+            document.getElementById('editor-coords-badge').innerText = `X: ${x}, Y: ${y}`;
+            if (this.isPainting && ['room', 'corridor', 'wall', 'eraser'].includes(this.editorTool)) {
+              this.applyToolAtCell(x, y, false);
+            }
+          }
+        });
+
+        window.addEventListener('mouseup', () => {
+          if (this.isPainting) {
+            this.isPainting = false;
+            const floor = this.project.floors[this.activeFloorIndex];
+            this.revalidateFloor(floor);
+            this.triggerAutosave();
+            this.renderEditorCanvas();
+            this.renderInspector();
+          }
+        });
+      },
+
+      applyToolAtCell(x, y, isSingleClick) {
+        const floor = this.project.floors[this.activeFloorIndex];
+        if (x <= 0 || y <= 0 || x >= floor.width - 1 || y >= floor.height - 1) return;
+
+        const tool = this.editorTool;
+        if (tool === 'room') {
+          floor.grid[y][x] = 1;
+        } else if (tool === 'corridor') {
+          floor.grid[y][x] = 2;
+        } else if (tool === 'wall') {
+          floor.grid[y][x] = 0;
+          floor.entities = floor.entities.filter(e => !(e.x === x && e.y === y));
+        } else if (tool === 'door') {
+          floor.grid[y][x] = 3;
+        } else if (tool === 'secret_door') {
+          floor.grid[y][x] = 4;
+        } else if (tool === 'eraser') {
+          const hadEntity = floor.entities.some(e => e.x === x && e.y === y);
+          if (hadEntity) {
+            floor.entities = floor.entities.filter(e => !(e.x === x && e.y === y));
+          } else {
+            floor.grid[y][x] = 0;
+          }
+        } else if (isSingleClick && ['enemy', 'treasure', 'trap', 'feature', 'stairs'].includes(tool)) {
+          if (floor.grid[y][x] === 0) floor.grid[y][x] = 1; // Asegurar suelo bajo la entidad
+          floor.entities = floor.entities.filter(e => !(e.x === x && e.y === y));
+          const subId = document.getElementById('editor-catalog-item').value;
+
+          if (tool === 'enemy') {
+            const tpl = this.project.bestiary.find(e => e.id === subId) || CATALOG.enemies[0];
+            floor.entities.push({
+              id: 'ent_' + Date.now(), x, y, category: 'enemy', subtype: tpl.id,
+              code: tpl.code, name: tpl.name, hp: tpl.hp, dmg: tpl.dmg, reward: tpl.reward, desc: tpl.desc
+            });
+          } else if (tool === 'treasure') {
+            const tpl = CATALOG.treasures.find(t => t.id === subId) || CATALOG.treasures[0];
+            floor.entities.push({
+              id: 'ent_' + Date.now(), x, y, category: 'treasure', subtype: tpl.id,
+              code: tpl.code, name: tpl.name, reward: tpl.value, desc: tpl.desc
+            });
+          } else if (tool === 'trap') {
+            const tpl = CATALOG.traps.find(t => t.id === subId) || CATALOG.traps[0];
+            floor.entities.push({
+              id: 'ent_' + Date.now(), x, y, category: 'trap', subtype: tpl.id,
+              code: tpl.code, name: tpl.name, dmg: tpl.dmg, desc: tpl.desc
+            });
+          } else if (tool === 'feature') {
+            const tpl = CATALOG.features.find(f => f.id === subId) || CATALOG.features[0];
+            floor.entities.push({
+              id: 'ent_' + Date.now(), x, y, category: 'feature', subtype: tpl.id,
+              code: tpl.code, name: tpl.name, desc: tpl.desc
+            });
+          } else if (tool === 'stairs') {
+            const isUp = subId === 'stairs_up';
+            floor.entities.push({
+              id: 'ent_' + Date.now(), x, y, category: 'stairs', subtype: subId,
+              code: isUp ? 'IN' : 'OUT',
+              name: isUp ? 'Escalera de Entrada' : 'Escalera de Salida',
+              targetFloor: isUp ? Math.max(1, floor.floorNumber - 1) : Math.min(this.project.floors.length, floor.floorNumber + 1),
+              desc: 'Conexión vertical entre plantas'
+            });
+          }
+          this.selectedCell = { x, y };
+        }
+
+        this.renderEditorCanvas();
+      },
+
+      revalidateFloor(floor) {
+        const startEnt = floor.entities.find(e => e.subtype === 'stairs_up') || floor.entities[0];
+        const endEnt = floor.entities.find(e => e.subtype === 'stairs_down') || floor.entities[floor.entities.length - 1];
+        if (startEnt && endEnt) {
+          const path = ProceduralEngine.findShortestPathBFS(
+            floor.grid, floor.width, floor.height,
+            { x: startEnt.x, y: startEnt.y },
+            { x: endEnt.x, y: endEnt.y }
+          );
+          floor.validPath = path || [];
+          floor.isConnected = !!(path && path.length > 0);
+        } else {
+          floor.validPath = [];
+          floor.isConnected = false;
+        }
+      },
+
+      renderEditorCanvas() {
+        const floor = this.project.floors[this.activeFloorIndex];
+        if (!floor) return;
+
+        document.getElementById('editor-floor-title').innerText = `Planta ${floor.floorNumber}: ${floor.name} (${floor.width}×${floor.height})`;
+        const badge = document.getElementById('editor-connectivity-badge');
+        if (floor.isConnected) {
+          badge.className = 'px-2 py-0.5 rounded text-[11px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+          badge.innerText = `✓ Ruta Válida (${floor.validPath.length} casillas)`;
+        } else {
+          badge.className = 'px-2 py-0.5 rounded text-[11px] font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30';
+          badge.innerText = `⚠ Entrada y Salida desconectadas`;
+        }
+
+        const canvas = document.getElementById('dungeon-canvas');
+        canvas.width = floor.width * this.cellSize;
+        canvas.height = floor.height * this.cellSize;
+
+        const showGrid = document.getElementById('chk-show-grid')?.checked ?? true;
+        const showPath = document.getElementById('chk-show-path')?.checked ?? true;
+
+        this.drawFloorOnCanvas(canvas, floor, {
+          showGrid,
+          showPath,
+          darkTheme: true,
+          selectedCell: this.selectedCell
+        });
+      },
+
+      // Renderizador Universal Canvas 2D (Usado en Editor, Miniaturas y Exportación PNG)
+      drawFloorOnCanvas(canvas, floor, opts = {}) {
+        const ctx = canvas.getContext('2d');
+        const w = floor.width;
+        const h = floor.height;
+        const cs = canvas.width / w;
+        const dark = opts.darkTheme !== false;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Fondo (Roca/Muro)
+        ctx.fillStyle = dark ? '#0b0e13' : '#d1d5db';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Hatching de muros si es modo claro/impresión
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const tile = floor.grid[y][x];
+            const px = x * cs;
+            const py = y * cs;
+
+            if (tile === 0) {
+              ctx.fillStyle = dark ? '#11161f' : '#e5e7eb';
+              ctx.fillRect(px, py, cs, cs);
+            } else if (tile === 1) {
+              ctx.fillStyle = dark ? '#262f3f' : '#ffffff';
+              ctx.fillRect(px, py, cs, cs);
+            } else if (tile === 2) {
+              ctx.fillStyle = dark ? '#1e2532' : '#f8fafc';
+              ctx.fillRect(px, py, cs, cs);
+            } else if (tile === 3) {
+              ctx.fillStyle = dark ? '#262f3f' : '#ffffff';
+              ctx.fillRect(px, py, cs, cs);
+              ctx.fillStyle = dark ? '#f59e0b' : '#111827';
+              ctx.fillRect(px + cs * 0.2, py + cs * 0.35, cs * 0.6, cs * 0.3);
+            } else if (tile === 4 || tile === 5) {
+              ctx.fillStyle = dark ? '#2e233a' : '#f3f4f6';
+              ctx.fillRect(px, py, cs, cs);
+            }
+
+            // Líneas de cuadrícula
+            if (opts.showGrid && tile > 0) {
+              ctx.strokeStyle = dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.22)';
+              ctx.lineWidth = 0.75;
+              ctx.strokeRect(px, py, cs, cs);
+            }
+          }
+        }
+
+        // 2. Paredes perimetrales gruesas entre celdas transitables y roca
+        ctx.strokeStyle = dark ? '#94a3b8' : '#000000';
+        ctx.lineWidth = Math.max(1.5, cs * 0.09);
+        ctx.beginPath();
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            if (floor.grid[y][x] > 0) {
+              const px = x * cs;
+              const py = y * cs;
+              if (y === 0 || floor.grid[y - 1][x] === 0) { ctx.moveTo(px, py); ctx.lineTo(px + cs, py); }
+              if (y === h - 1 || floor.grid[y + 1][x] === 0) { ctx.moveTo(px, py + cs); ctx.lineTo(px + cs, py + cs); }
+              if (x === 0 || floor.grid[y][x - 1] === 0) { ctx.moveTo(px, py); ctx.lineTo(px, py + cs); }
+              if (x === w - 1 || floor.grid[y][x + 1] === 0) { ctx.moveTo(px + cs, py); ctx.lineTo(px + cs, py + cs); }
+            }
+          }
+        }
+        ctx.stroke();
+
+        // 3. Ruta validada BFS
+        if (opts.showPath && floor.validPath && floor.validPath.length > 1) {
+          ctx.strokeStyle = dark ? 'rgba(16, 185, 129, 0.45)' : 'rgba(16, 185, 129, 0.6)';
+          ctx.lineWidth = Math.max(2, cs * 0.14);
+          ctx.beginPath();
+          floor.validPath.forEach((pt, idx) => {
+            const cx = (pt.x + 0.5) * cs;
+            const cy = (pt.y + 0.5) * cs;
+            if (idx === 0) ctx.moveTo(cx, cy);
+            else ctx.lineTo(cx, cy);
+          });
+          ctx.stroke();
+        }
+
+        // 4. Numeración de Habitaciones
+        if (cs >= 14) {
+          ctx.font = `bold ${Math.max(8, Math.floor(cs * 0.34))}px JetBrains Mono, monospace`;
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          floor.rooms.forEach(r => {
+            ctx.fillStyle = dark ? 'rgba(245, 158, 11, 0.55)' : 'rgba(0, 0, 0, 0.55)';
+            ctx.fillText(r.id, r.x * cs + 2, r.y * cs + 2);
+          });
+        }
+
+        // 5. Entidades (Enemigos, Tesoros, Trampas, Escaleras)
+        floor.entities.forEach(ent => {
+          const cx = (ent.x + 0.5) * cs;
+          const cy = (ent.y + 0.5) * cs;
+          const r = cs * 0.38;
+
+          let fill = '#64748b';
+          if (ent.category === 'stairs') fill = ent.subtype === 'stairs_up' ? '#10b981' : '#3b82f6';
+          else if (ent.category === 'enemy') fill = '#f43f5e';
+          else if (ent.category === 'treasure') fill = '#f59e0b';
+          else if (ent.category === 'trap') fill = '#f97316';
+          else if (ent.category === 'feature') fill = '#06b6d4';
+
+          ctx.fillStyle = dark ? fill : '#ffffff';
+          ctx.strokeStyle = dark ? '#0d0f12' : '#000000';
+          ctx.lineWidth = 1.5;
+
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+
+          if (cs >= 12) {
+            ctx.fillStyle = dark ? '#ffffff' : '#000000';
+            ctx.font = `bold ${Math.max(7, Math.floor(cs * 0.33))}px JetBrains Mono, monospace`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(ent.code || '?', cx, cy + 0.5);
+          }
+        });
+
+        // 6. Celda Seleccionada en el Editor
+        if (opts.selectedCell) {
+          const sx = opts.selectedCell.x * cs;
+          const sy = opts.selectedCell.y * cs;
+          ctx.strokeStyle = '#f59e0b';
+          ctx.lineWidth = 2.5;
+          ctx.strokeRect(sx + 1, sy + 1, cs - 2, cs - 2);
+        }
+      },
+
+      renderInspector() {
+        const floor = this.project.floors[this.activeFloorIndex];
+        if (!floor) return;
+
+        document.getElementById('floor-prop-name').value = floor.name;
+        document.getElementById('floor-prop-objective').value = floor.objective;
+        document.getElementById('floor-room-count').innerText = floor.rooms.length;
+
+        // Lista de habitaciones de la planta
+        document.getElementById('floor-rooms-list').innerHTML = floor.rooms.map((r, i) => `
+          <div onclick="App.selectRoomInEditor(${i})" class="p-2 rounded bg-forge-950 border border-forge-800 hover:border-amber-500/50 cursor-pointer flex items-center justify-between text-xs">
+            <div>
+              <span class="font-mono text-amber-400 font-bold">${r.id}</span>
+              <span class="text-gray-200 ml-1">${r.name}</span>
+            </div>
+            <span class="text-[10px] text-gray-400">${r.type}</span>
+          </div>
+        `).join('');
+
+        const box = document.getElementById('inspector-content');
+        if (!this.selectedCell) {
+          box.innerHTML = `<p class="text-gray-400">Haz clic sobre cualquier casilla, sala o entidad en el mapa con la herramienta <b>Selección</b> para editar sus propiedades o conexiones entre plantas.</p>`;
+          return;
+        }
+
+        const { x, y } = this.selectedCell;
+        const tile = floor.grid[y]?.[x] ?? 0;
+        const ent = floor.entities.find(e => e.x === x && e.y === y);
+        const room = floor.rooms.find(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+
+        let html = `
+          <div class="p-2.5 rounded bg-forge-950 border border-forge-700 font-mono text-[11px] flex justify-between">
+            <span>Coordenada: (${x}, ${y})</span>
+            <span class="text-amber-400">${['Muro/Roca', 'Suelo Sala', 'Pasillo', 'Puerta', 'Puerta Secreta', 'Sala Secreta'][tile] || 'Celdas'}</span>
+          </div>
+        `;
+
+        if (ent) {
+          html += `
+            <div class="p-3 rounded-lg bg-forge-950 border border-amber-500/40 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-amber-300 uppercase text-[11px] font-mono">Entidad (${ent.code})</span>
+                <button onclick="App.deleteSelectedEntity()" class="text-rose-400 hover:underline text-[11px]">Eliminar</button>
+              </div>
+              <div>
+                <label class="text-[11px] text-gray-400 block mb-0.5">Nombre</label>
+                <input type="text" value="${ent.name}" onchange="App.updateSelectedEntityField('name', this.value)" class="w-full bg-forge-900 border border-forge-700 rounded px-2 py-1 text-white" />
+              </div>
+              ${ent.category === 'enemy' ? `
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="text-[11px] text-gray-400 block mb-0.5">Puntos de Vida</label>
+                    <input type="number" value="${ent.hp || 6}" onchange="App.updateSelectedEntityField('hp', parseInt(this.value))" class="w-full bg-forge-900 border border-forge-700 rounded px-2 py-1 text-white font-mono" />
+                  </div>
+                  <div>
+                    <label class="text-[11px] text-gray-400 block mb-0.5">Daño</label>
+                    <input type="number" value="${ent.dmg || 2}" onchange="App.updateSelectedEntityField('dmg', parseInt(this.value))" class="w-full bg-forge-900 border border-forge-700 rounded px-2 py-1 text-white font-mono" />
+                  </div>
+                </div>
+              ` : ''}
+              ${ent.category === 'stairs' ? `
+                <div>
+                  <label class="text-[11px] text-emerald-400 block mb-0.5">Conecta con Planta Nº</label>
+                  <input type="number" min="1" max="${this.project.floors.length}" value="${ent.targetFloor || 1}" onchange="App.updateSelectedEntityField('targetFloor', parseInt(this.value))" class="w-full bg-forge-900 border border-emerald-500/40 rounded px-2 py-1 text-white font-mono" />
+                </div>
+              ` : ''}
+              <div>
+                <label class="text-[11px] text-gray-400 block mb-0.5">Notas / Regla Especial</label>
+                <input type="text" value="${ent.desc || ''}" onchange="App.updateSelectedEntityField('desc', this.value)" class="w-full bg-forge-900 border border-forge-700 rounded px-2 py-1 text-white" />
+              </div>
+            </div>
+          `;
+        }
+
+        if (room) {
+          html += `
+            <div class="p-3 rounded-lg bg-forge-950 border border-forge-700 space-y-2">
+              <span class="font-bold text-white block">Habitación ${room.id}</span>
+              <div>
+                <label class="text-[11px] text-gray-400 block mb-0.5">Nombre de Cámara</label>
+                <input type="text" value="${room.name}" onchange="App.updateRoomField('${room.id}', 'name', this.value)" class="w-full bg-forge-900 border border-forge-700 rounded px-2 py-1 text-white" />
+              </div>
+              <div>
+                <label class="text-[11px] text-gray-400 block mb-0.5">Categoría</label>
+                <select onchange="App.updateRoomField('${room.id}', 'type', this.value)" class="w-full bg-forge-900 border border-forge-700 rounded px-2 py-1 text-white">
+                  ${CATALOG.roomTypes.map(rt => `<option value="${rt}" ${rt === room.type ? 'selected' : ''}>${rt}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+          `;
+        }
+
+        box.innerHTML = html;
+      },
+
+      selectRoomInEditor(roomIdx) {
+        const floor = this.project.floors[this.activeFloorIndex];
+        const room = floor.rooms[roomIdx];
+        if (room) {
+          this.selectedCell = { x: room.cx, y: room.cy };
+          this.renderEditorCanvas();
+          this.renderInspector();
+        }
+      },
+
+      updateSelectedEntityField(field, val) {
+        const floor = this.project.floors[this.activeFloorIndex];
+        if (!this.selectedCell) return;
+        const ent = floor.entities.find(e => e.x === this.selectedCell.x && e.y === this.selectedCell.y);
+        if (ent) {
+          ent[field] = val;
+          this.triggerAutosave();
+          this.renderEditorCanvas();
+        }
+      },
+
+      deleteSelectedEntity() {
+        const floor = this.project.floors[this.activeFloorIndex];
+        if (!this.selectedCell) return;
+        floor.entities = floor.entities.filter(e => !(e.x === this.selectedCell.x && e.y === this.selectedCell.y));
+        this.revalidateFloor(floor);
+        this.triggerAutosave();
+        this.renderEditorCanvas();
+        this.renderInspector();
+      },
+
+      updateRoomField(roomId, field, val) {
+        const floor = this.project.floors[this.activeFloorIndex];
+        const room = floor.rooms.find(r => r.id === roomId);
+        if (room) {
+          room[field] = val;
+          this.triggerAutosave();
+          this.renderInspector();
+        }
+      },
+
+      updateActiveFloorMeta() {
+        const floor = this.project.floors[this.activeFloorIndex];
+        floor.name = document.getElementById('floor-prop-name').value;
+        floor.objective = document.getElementById('floor-prop-objective').value;
+        this.populateFloorSelector();
+        this.renderEditorCanvas();
+        this.triggerAutosave();
+      },
+
+      exportCurrentMapPNG() {
+        const floor = this.project.floors[this.activeFloorIndex];
+        const offCanvas = document.createElement('canvas');
+        offCanvas.width = floor.width * 36;
+        offCanvas.height = floor.height * 36;
+        this.drawFloorOnCanvas(offCanvas, floor, { showGrid: true, showPath: false, darkTheme: false });
+        const link = document.createElement('a');
+        link.download = `${this.project.name.replace(/\s+/g, '_')}_Planta_${floor.floorNumber}.png`;
+        link.href = offCanvas.toDataURL('image/png');
+        link.click();
+        this.showToast(`Mapa de Planta ${floor.floorNumber} descargado en PNG.`);
+      },
+
+      /***********************************************************************
+       * VISTA CONSTRUCTOR DE CUADERNOS (PÁGINAS Y MAQUETACIÓN)
+       ***********************************************************************/
+      rebuildNotebookPages() {
+        this.project.pages = this.buildDefaultPagesForProject(this.project);
+        this.activeNotebookPageIndex = 0;
+        this.triggerAutosave();
+        if (this.activeTab === 'notebook') this.renderNotebookBuilder();
+        this.showToast('Cuaderno maquetado con todas las plantas y anexos.');
+      },
+
+      setNotebookLengthPreset(targetCount) {
+        this.project.pages = this.buildDefaultPagesForProject(this.project);
+        const cycleTypes = ['events', 'notes', 'tracker', 'treasures'];
+        let i = 0;
+        while (this.project.pages.length < targetCount) {
+          const t = cycleTypes[i % cycleTypes.length];
+          this.project.pages.push({
+            id: `p_extra_${Date.now()}_${i}`,
+            type: t,
+            title: t === 'notes' ? `HOJA DE NOTAS Y CARTOGRAFÍA #${i + 1}` : `TABLA SUPLEMENTARIA #${i + 1}`,
+            subtitle: 'Sección adicional del cuaderno de campaña',
+            description: 'Espacio reservado para encuentros emergentes y registro de campaña.'
+          });
+          i++;
+        }
+        this.activeNotebookPageIndex = 0;
+        this.triggerAutosave();
+        this.renderNotebookBuilder();
+        this.showToast(`Cuaderno ajustado a ${this.project.pages.length} páginas.`);
+      },
+
+      addNotebookPage() {
+        const type = document.getElementById('add-page-type-select').value;
+        const titles = {
+          cover: 'PORTADA DE AVENTURA',
+          intro: 'TRASFONDO Y CRÓNICA INICIAL',
+          rules: 'REGLAS DE EXPLORACIÓN',
+          character: 'FICHA DE HÉROE',
+          map: `MAPA DE PLANTA`,
+          bestiary: 'CATÁLOGO DE ENEMIGOS',
+          treasures: 'TABLA DE TESOROS Y RELIQUIAS',
+          events: 'TABLA DE ACONTECIMIENTOS (1d6)',
+          tracker: 'SEGUIMIENTO DE CAMPAÑA',
+          notes: 'NOTAS DEL EXPLORADOR'
+        };
+        this.project.pages.push({
+          id: 'p_' + Date.now(),
+          type,
+          floorIndex: 0,
+          title: titles[type] || 'NUEVA PÁGINA',
+          subtitle: this.project.name,
+          description: ''
+        });
+        this.activeNotebookPageIndex = this.project.pages.length - 1;
+        this.triggerAutosave();
+        this.renderNotebookBuilder();
+      },
+
+      moveNotebookPage(idx, dir) {
+        const target = idx + dir;
+        if (target < 0 || target >= this.project.pages.length) return;
+        const temp = this.project.pages[idx];
+        this.project.pages[idx] = this.project.pages[target];
+        this.project.pages[target] = temp;
+        this.activeNotebookPageIndex = target;
+        this.triggerAutosave();
+        this.renderNotebookBuilder();
+      },
+
+      duplicateNotebookPage(idx) {
+        const copy = JSON.parse(JSON.stringify(this.project.pages[idx]));
+        copy.id = 'p_dup_' + Date.now();
+        this.project.pages.splice(idx + 1, 0, copy);
+        this.activeNotebookPageIndex = idx + 1;
+        this.triggerAutosave();
+        this.renderNotebookBuilder();
+      },
+
+      deleteNotebookPage(idx) {
+        if (this.project.pages.length <= 1) return;
+        this.project.pages.splice(idx, 1);
+        this.activeNotebookPageIndex = Math.max(0, Math.min(this.activeNotebookPageIndex, this.project.pages.length - 1));
+        this.triggerAutosave();
+        this.renderNotebookBuilder();
+      },
+
+      stepNotebookPage(delta) {
+        const next = this.activeNotebookPageIndex + delta;
+        if (next >= 0 && next < this.project.pages.length) {
+          this.activeNotebookPageIndex = next;
+          this.renderNotebookBuilder();
+        }
+      },
+
+      renderNotebookBuilder() {
+        const pages = this.project.pages;
+        const listEl = document.getElementById('notebook-pages-list');
+        listEl.innerHTML = pages.map((pg, idx) => `
+          <div onclick="App.activeNotebookPageIndex=${idx}; App.renderNotebookBuilder();"
+            class="p-2.5 rounded-lg border cursor-pointer transition flex items-center justify-between ${idx === this.activeNotebookPageIndex ? 'bg-amber-500/15 border-amber-500 text-white' : 'bg-forge-950 border-forge-800 text-gray-300 hover:border-forge-600'}">
+            <div class="truncate pr-2">
+              <div class="text-[10px] font-mono uppercase text-amber-400">Pág. ${idx + 1} • ${pg.type}</div>
+              <div class="font-semibold text-xs truncate">${pg.title}</div>
+            </div>
+            <div class="flex items-center gap-1 shrink-0" onclick="event.stopPropagation()">
+              <button onclick="App.moveNotebookPage(${idx}, -1)" title="Subir" class="p-1 hover:text-amber-400"><i data-lucide="arrow-up" class="w-3.5 h-3.5"></i></button>
+              <button onclick="App.moveNotebookPage(${idx}, 1)" title="Bajar" class="p-1 hover:text-amber-400"><i data-lucide="arrow-down" class="w-3.5 h-3.5"></i></button>
+              <button onclick="App.duplicateNotebookPage(${idx})" title="Duplicar" class="p-1 hover:text-amber-400"><i data-lucide="copy" class="w-3.5 h-3.5"></i></button>
+              <button onclick="App.deleteNotebookPage(${idx})" title="Eliminar" class="p-1 hover:text-rose-400"><i data-lucide="x" class="w-3.5 h-3.5"></i></button>
+            </div>
+          </div>
+        `).join('');
+
+        const current = pages[this.activeNotebookPageIndex];
+        document.getElementById('notebook-preview-indicator').innerText = `Página ${this.activeNotebookPageIndex + 1} de ${pages.length}`;
+
+        // Renderizar Inspector de Página
+        const insp = document.getElementById('notebook-page-inspector');
+        insp.innerHTML = `
+          <div>
+            <label class="text-gray-400 block mb-1">Título de Página</label>
+            <input type="text" value="${current.title}" onchange="App.updateCurrentPageField('title', this.value)" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white" />
+          </div>
+          <div>
+            <label class="text-gray-400 block mb-1">Subtítulo / Encabezado</label>
+            <input type="text" value="${current.subtitle || ''}" onchange="App.updateCurrentPageField('subtitle', this.value)" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white" />
+          </div>
+          ${current.type === 'map' ? `
+            <div>
+              <label class="text-gray-400 block mb-1">Planta Asociada</label>
+              <select onchange="App.updateCurrentPageField('floorIndex', parseInt(this.value))" class="w-full bg-forge-950 border border-forge-700 rounded px-2.5 py-1.5 text-white">
+                ${this.project.floors.map((f, i) => `<option value="${i}" ${i === (current.floorIndex || 0) ? 'selected' : ''}>Planta ${f.floorNumber}: ${f.name}</option>`).join('')}
+              </select>
+            </div>
+          ` : ''}
+          <div>
+            <label class="text-gray-400 block mb-1">Descripción / Texto de Página</label>
+            <textarea rows="5" onchange="App.updateCurrentPageField('description', this.value)" class="w-full bg-forge-950 border border-forge-700 rounded p-2 text-white">${current.description || ''}</textarea>
+          </div>
+        `;
+
+        // Renderizar Vista Previa HTML de la Hoja
+        this.renderSinglePageHTMLPreview(current, this.activeNotebookPageIndex + 1, pages.length);
+        lucide.createIcons();
+      },
+
+      updateCurrentPageField(field, val) {
+        const pg = this.project.pages[this.activeNotebookPageIndex];
+        if (!pg) return;
+        pg[field] = val;
+        if (field === 'floorIndex') {
+          const f = this.project.floors[val];
+          if (f) {
+            pg.title = f.name;
+            pg.subtitle = `Planta ${f.floorNumber} • Dificultad ${f.difficulty}/5`;
+            pg.description = f.objective;
+          }
+        }
+        this.triggerAutosave();
+        this.renderNotebookBuilder();
+      },
+
+      renderSinglePageHTMLPreview(pg, pageNum, totalPages) {
+        const wrapper = document.getElementById('notebook-page-canvas-wrapper');
+        const c = this.project.character;
+
+        let bodyHTML = '';
+        if (pg.type === 'cover') {
+          bodyHTML = `
+            <div class="flex-1 flex flex-col items-center justify-center text-center border-4 border-double border-gray-900 p-6 my-4">
+              <div class="text-xs font-mono tracking-widest uppercase text-gray-600 mb-2">CUADERNO DE AVENTURAS ROLL & WRITE</div>
+              <h1 class="text-3xl font-extrabold tracking-tight text-gray-950 mb-3">${pg.title}</h1>
+              <p class="text-sm font-medium text-gray-700 mb-6">${pg.subtitle || ''}</p>
+              <div class="w-36 h-36 border-2 border-gray-900 flex items-center justify-center mb-6 bg-gray-100">
+                <span class="font-mono text-xs text-gray-700 px-2">${this.project.config.seed}</span>
+              </div>
+              <p class="text-xs text-gray-600 max-w-xs">${pg.description || ''}</p>
+            </div>
+          `;
+        } else if (pg.type === 'character') {
+          bodyHTML = `
+            <div class="flex-1 space-y-4 my-3 text-xs">
+              <div class="grid grid-cols-2 gap-3 border-2 border-gray-900 p-3">
+                <div><b>HÉROE:</b> ${c.name}</div>
+                <div><b>CLASE:</b> ${c.className}</div>
+                <div><b>SALUD (HP):</b> [ ${c.hp} / ${c.hp} ]</div>
+                <div><b>ATAQUE / DEFENSA:</b> ATK +${c.atk} | DEF ${c.def}</div>
+                <div><b>VELOCIDAD:</b> 1d6 + ${c.spd}</div>
+                <div><b>ORO ACUMULADO:</b> ${c.gold} monedas</div>
+              </div>
+              <div class="border-2 border-gray-900 p-3">
+                <div class="font-bold mb-2 uppercase">Casillas de Seguimiento de Vida (Tacha al recibir daño)</div>
+                <div class="grid grid-cols-10 gap-1.5 font-mono text-[11px]">
+                  ${Array.from({ length: 30 }, (_, i) => `<div class="border border-gray-800 text-center py-1">${i + 1}</div>`).join('')}
+                </div>
+              </div>
+              <div class="border-2 border-gray-900 p-3 h-48">
+                <div class="font-bold mb-1 uppercase">Inventario y Reliquias Equipadas</div>
+                <p class="text-gray-700 mb-2">Inicial: ${c.items}</p>
+                <div class="space-y-3 pt-2">
+                  <div class="border-b border-gray-400 h-4"></div>
+                  <div class="border-b border-gray-400 h-4"></div>
+                  <div class="border-b border-gray-400 h-4"></div>
+                  <div class="border-b border-gray-400 h-4"></div>
+                </div>
+              </div>
+            </div>
+          `;
+        } else if (pg.type === 'map') {
+          const floor = this.project.floors[pg.floorIndex || 0] || this.project.floors[0];
+          bodyHTML = `
+            <div class="flex-1 flex flex-col justify-between my-2">
+              <div class="flex items-center justify-center border-2 border-gray-900 p-2 bg-gray-50">
+                <canvas id="notebook-preview-map-canvas" width="380" height="380"></canvas>
+              </div>
+              <div class="mt-3 border-2 border-gray-900 p-2.5 text-[11px] space-y-1">
+                <div class="font-bold uppercase">Objetivo: ${floor.objective}</div>
+                <div class="grid grid-cols-2 gap-1 text-[10px] font-mono">
+                  <div><b>IN:</b> Entrada de Planta</div>
+                  <div><b>OUT:</b> Escalera de Descenso</div>
+                  <div><b>E1-E9 / JB:</b> Enemigos (${floor.entities.filter(e => e.category === 'enemy').length})</div>
+                  <div><b>T1-T8:</b> Tesoros (${floor.entities.filter(e => e.category === 'treasure').length})</div>
+                </div>
+              </div>
+            </div>
+          `;
+        } else if (pg.type === 'bestiary') {
+          bodyHTML = `
+            <div class="flex-1 my-3">
+              <table class="w-full border-collapse border-2 border-gray-900 text-[11px]">
+                <thead>
+                  <tr class="bg-gray-200 border-b-2 border-gray-900 text-left">
+                    <th class="p-1.5 border border-gray-700">Cód.</th>
+                    <th class="p-1.5 border border-gray-700">Criatura</th>
+                    <th class="p-1.5 border border-gray-700">Niv.</th>
+                    <th class="p-1.5 border border-gray-700">HP</th>
+                    <th class="p-1.5 border border-gray-700">Daño</th>
+                    <th class="p-1.5 border border-gray-700">Recompensa</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${this.project.bestiary.map(e => `
+                    <tr class="border-b border-gray-400">
+                      <td class="p-1.5 font-mono font-bold border border-gray-400">${e.code}</td>
+                      <td class="p-1.5 font-semibold border border-gray-400">${e.name}</td>
+                      <td class="p-1.5 font-mono border border-gray-400">${e.level}</td>
+                      <td class="p-1.5 font-mono border border-gray-400">${e.hp}</td>
+                      <td class="p-1.5 font-mono border border-gray-400">${e.dmg}</td>
+                      <td class="p-1.5 border border-gray-400">${e.reward}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
+        } else {
+          bodyHTML = `
+            <div class="flex-1 my-3 border-2 border-gray-900 p-4 text-xs leading-relaxed whitespace-pre-line">
+              ${pg.description || 'Espacio estructurado para anotaciones, eventos aleatorios y seguimiento durante la partida.'}
+              <div class="mt-6 space-y-4">
+                ${Array.from({ length: 12 }, () => `<div class="border-b border-gray-300 h-5"></div>`).join('')}
+              </div>
+            </div>
+          `;
+        }
+
+        wrapper.innerHTML = `
+          <div class="border-b-2 border-gray-900 pb-2 flex items-center justify-between">
+            <div>
+              <h2 class="font-extrabold text-sm tracking-wide uppercase text-gray-950">${pg.title}</h2>
+              <p class="text-[11px] text-gray-600">${pg.subtitle || ''}</p>
+            </div>
+            <span class="font-mono text-xs font-bold border border-gray-900 px-2 py-0.5">PÁG. ${pageNum}</span>
+          </div>
+          ${bodyHTML}
+          <div class="border-t border-gray-800 pt-1.5 flex justify-between text-[10px] font-mono text-gray-600">
+            <span>${this.project.name} • Semilla: ${this.project.config.seed}</span>
+            <span>Página ${pageNum} de ${totalPages}</span>
+          </div>
+        `;
+
+        if (pg.type === 'map') {
+          const floor = this.project.floors[pg.floorIndex || 0] || this.project.floors[0];
+          const cMap = document.getElementById('notebook-preview-map-canvas');
+          if (cMap && floor) {
+            this.drawFloorOnCanvas(cMap, floor, { showGrid: true, showPath: false, darkTheme: false });
+          }
+        }
+      },
+
+      /***********************************************************************
+       * VISTA REGLAS Y BESTIARIO CONFIGURABLE
+       ***********************************************************************/
+      renderRulesView() {
+        const c = this.project.character;
+        const r = this.project.rules;
+        document.getElementById('char-name').value = c.name;
+        document.getElementById('char-class').value = c.className;
+        document.getElementById('char-hp').value = c.hp;
+        document.getElementById('char-atk').value = c.atk;
+        document.getElementById('char-def').value = c.def;
+        document.getElementById('char-spd').value = c.spd;
+        document.getElementById('char-gold').value = c.gold;
+        document.getElementById('char-items').value = c.items;
+
+        document.getElementById('rule-dice').value = r.dice;
+        document.getElementById('rule-combat').value = r.combat;
+        document.getElementById('rule-summary').value = r.summary;
+
+        const tableEl = document.getElementById('rules-bestiary-table');
+        tableEl.innerHTML = `
+          <table class="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr class="border-b border-forge-700 text-gray-400 font-mono">
+                <th class="py-2 px-2">Código</th>
+                <th class="py-2 px-2">Nombre</th>
+                <th class="py-2 px-2">Nivel</th>
+                <th class="py-2 px-2">HP</th>
+                <th class="py-2 px-2">Daño</th>
+                <th class="py-2 px-2">Recompensa</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${this.project.bestiary.map((e, idx) => `
+                <tr class="border-b border-forge-800">
+                  <td class="py-1.5 px-2 font-mono text-amber-400 font-bold">${e.code}</td>
+                  <td class="py-1.5 px-2"><input type="text" value="${e.name}" onchange="App.updateBestiaryItem(${idx}, 'name', this.value)" class="bg-forge-950 border border-forge-700 rounded px-2 py-1 text-white w-40" /></td>
+                  <td class="py-1.5 px-2"><input type="number" value="${e.level}" onchange="App.updateBestiaryItem(${idx}, 'level', parseInt(this.value))" class="bg-forge-950 border border-forge-700 rounded px-2 py-1 text-white font-mono w-16" /></td>
+                  <td class="py-1.5 px-2"><input type="number" value="${e.hp}" onchange="App.updateBestiaryItem(${idx}, 'hp', parseInt(this.value))" class="bg-forge-950 border border-forge-700 rounded px-2 py-1 text-white font-mono w-16" /></td>
+                  <td class="py-1.5 px-2"><input type="number" value="${e.dmg}" onchange="App.updateBestiaryItem(${idx}, 'dmg', parseInt(this.value))" class="bg-forge-950 border border-forge-700 rounded px-2 py-1 text-white font-mono w-16" /></td>
+                  <td class="py-1.5 px-2"><input type="text" value="${e.reward}" onchange="App.updateBestiaryItem(${idx}, 'reward', this.value)" class="bg-forge-950 border border-forge-700 rounded px-2 py-1 text-white w-44" /></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      },
+
+      saveRulesAndCharacterFromUI() {
+        this.project.character = {
+          name: document.getElementById('char-name').value,
+          className: document.getElementById('char-class').value,
+          hp: parseInt(document.getElementById('char-hp').value) || 20,
+          atk: parseInt(document.getElementById('char-atk').value) || 3,
+          def: parseInt(document.getElementById('char-def').value) || 2,
+          spd: parseInt(document.getElementById('char-spd').value) || 1,
+          gold: parseInt(document.getElementById('char-gold').value) || 30,
+          items: document.getElementById('char-items').value
+        };
+        this.project.rules = {
+          dice: document.getElementById('rule-dice').value,
+          combat: document.getElementById('rule-combat').value,
+          summary: document.getElementById('rule-summary').value
+        };
+        this.triggerAutosave();
+      },
+
+      updateBestiaryItem(idx, field, val) {
+        this.project.bestiary[idx][field] = val;
+        this.triggerAutosave();
+      },
+
+      /***********************************************************************
+       * IMPORTACIÓN / EXPORTACIÓN JSON DEL PROYECTO
+       ***********************************************************************/
+      async saveProjectManual() {
+        await this.triggerAutosave();
+        this.showToast('Proyecto guardado en IndexedDB.');
+      },
+
+      exportJSON() {
+        const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(this.project, null, 2));
+        const a = document.createElement('a');
+        a.href = dataStr;
+        a.download = `${this.project.name.replace(/\s+/g, '_')}.dungeonforge.json`;
+        a.click();
+        this.showToast('Archivo JSON del proyecto exportado.');
+      },
+
+      importJSON(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const imported = JSON.parse(e.target.result);
+            if (!imported.floors || !imported.config) throw new Error('Estructura inválida');
+            imported.id = 'proj_' + Date.now();
+            this.project = imported;
+            this.activeFloorIndex = 0;
+            this.syncUIFromProject();
+            await this.triggerAutosave();
+            this.setTab('dashboard');
+            this.showToast(`Proyecto "${imported.name}" importado con éxito.`);
+          } catch (err) {
+            alert('El archivo JSON seleccionado no es un proyecto válido de Dungeon Forge.');
+          }
+        };
+        reader.readAsText(file);
+      },
+
+      /***********************************************************************
+       * VISTA Y MOTOR DE EXPORTACIÓN PDF VECTORIAL REAL (PDF-LIB)
+       ***********************************************************************/
+      updateExportPreview() {
+        const format = document.getElementById('pdf-format').value;
+        const orient = document.getElementById('pdf-orientation').value;
+        const colorMode = document.getElementById('pdf-colormode').value;
+        const pages = this.project.pages;
+
+        document.getElementById('export-summary-text').innerText =
+          `Formato: ${format} (${orient}) • Modo: ${colorMode.toUpperCase()} • ${pages.length} páginas listas para impresión vectorial.`;
+
+        const container = document.getElementById('export-sheets-preview');
+        container.innerHTML = pages.map((pg, idx) => `
+          <div class="bg-white text-gray-900 rounded shadow-lg p-4 border border-gray-300 flex flex-col justify-between h-64">
+            <div class="border-b border-gray-800 pb-1 flex justify-between items-center">
+              <span class="font-bold text-xs uppercase truncate pr-2">${pg.title}</span>
+              <span class="font-mono text-[10px] px-1.5 py-0.5 border border-gray-800">Pág ${idx + 1}</span>
+            </div>
+            <div class="flex-1 flex items-center justify-center text-center p-2">
+              <div>
+                <div class="text-[10px] font-mono uppercase text-gray-500 mb-1">Tipo: ${pg.type.toUpperCase()}</div>
+                <p class="text-xs text-gray-700 line-clamp-3">${pg.subtitle || pg.description || 'Contenido vectorial preparado'}</p>
+              </div>
+            </div>
+            <div class="border-t border-gray-300 pt-1 flex justify-between text-[9px] font-mono text-gray-500">
+              <span>${format} • ${colorMode.toUpperCase()}</span>
+              <span>Vector PDF</span>
+            </div>
+          </div>
+        `).join('');
+      },
+
+      quickGeneratePDF() {
+        this.setTab('export');
+        this.generateAndDownloadPDF();
+      },
+
+      // Sanitiza caracteres fuera de WinAnsi para las fuentes estándar de PDF-Lib
+      cleanWinAnsi(str) {
+        if (!str) return '';
+        return String(str)
+          .replace(/[•·]/g, '-')
+          .replace(/[—–]/g, '-')
+          .replace(/[^\x00-\xFF]/g, '');
+      },
+
+      async generateAndDownloadPDF() {
+        const btn = document.getElementById('btn-generate-pdf');
+        const progress = document.getElementById('pdf-progress-box');
+        btn.disabled = true;
+        progress.classList.remove('hidden');
+
+        try {
+          const { PDFDocument, StandardFonts, rgb } = PDFLib;
+          const pdfDoc = await PDFDocument.create();
+          const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+          const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+          const fontMono = await pdfDoc.embedFont(StandardFonts.CourierBold);
+
+          const format = document.getElementById('pdf-format').value;
+          const orientation = document.getElementById('pdf-orientation').value;
+          const colorMode = document.getElementById('pdf-colormode').value;
+          const margin = Math.max(12, Math.min(60, parseInt(document.getElementById('pdf-margin').value) || 28));
+          const scope = document.getElementById('pdf-scope').value;
+          const includeNumbering = document.getElementById('pdf-numbering').checked;
+          const includeCropMarks = document.getElementById('pdf-cropmarks').checked;
+          const includeLegend = document.getElementById('pdf-legend').checked;
+
+          // Dimensiones en puntos tipográficos (1 pt = 1/72 inch)
+          const sizes = {
+            A4: [595.28, 841.89],
+            A5: [419.53, 595.28],
+            POCKET: [216, 360] // 3 x 5 pulgadas
+          };
+          let [pageW, pageH] = sizes[format] || sizes.A5;
+          if (orientation === 'landscape') [pageW, pageH] = [pageH, pageW];
+
+          // Paleta según modo de impresión
+          const palette = {
+            black: rgb(0, 0, 0),
+            darkGray: rgb(0.2, 0.2, 0.2),
+            midGray: rgb(0.55, 0.55, 0.55),
+            lightGray: rgb(0.92, 0.92, 0.92),
+            white: rgb(1, 1, 1),
+            accent: colorMode === 'color' ? rgb(0.85, 0.45, 0.05) : rgb(0.15, 0.15, 0.15),
+            enemy: colorMode === 'color' ? rgb(0.85, 0.15, 0.25) : rgb(0, 0, 0),
+            treasure: colorMode === 'color' ? rgb(0.85, 0.55, 0.05) : rgb(0.2, 0.2, 0.2),
+            stairs: colorMode === 'color' ? rgb(0.05, 0.55, 0.35) : rgb(0, 0, 0)
+          };
+
+          // Filtrar páginas según alcance
+          let pagesToRender = this.project.pages;
+          if (scope === 'maps_only') {
+            pagesToRender = this.project.pages.filter(p => p.type === 'map');
+          } else if (scope === 'current_floor') {
+            pagesToRender = [{
+              type: 'map',
+              floorIndex: this.activeFloorIndex,
+              title: this.project.floors[this.activeFloorIndex].name,
+              subtitle: `Planta ${this.activeFloorIndex + 1}`,
+              description: this.project.floors[this.activeFloorIndex].objective
+            }];
+          }
+
+          for (let i = 0; i < pagesToRender.length; i++) {
+            const pg = pagesToRender[i];
+            const page = pdfDoc.addPage([pageW, pageH]);
+
+            // Marcas de corte opcionales
+            if (includeCropMarks) {
+              const cm = 10;
+              page.drawLine({ start: { x: 0, y: pageH - cm }, end: { x: cm, y: pageH - cm }, thickness: 0.5, color: palette.midGray });
+              page.drawLine({ start: { x: cm, y: pageH }, end: { x: cm, y: pageH - cm }, thickness: 0.5, color: palette.midGray });
+              page.drawLine({ start: { x: pageW - cm, y: pageH - cm }, end: { x: pageW, y: pageH - cm }, thickness: 0.5, color: palette.midGray });
+              page.drawLine({ start: { x: pageW - cm, y: pageH }, end: { x: pageW - cm, y: pageH - cm }, thickness: 0.5, color: palette.midGray });
+            }
+
+            // Encabezado de página
+            const topY = pageH - margin;
+            page.drawText(this.cleanWinAnsi(pg.title || 'DUNGEON FORGE').substring(0, 48), {
+              x: margin,
+              y: topY - 12,
+              size: format === 'POCKET' ? 9 : 12,
+              font: fontBold,
+              color: palette.black
+            });
+
+            if (pg.subtitle) {
+              page.drawText(this.cleanWinAnsi(pg.subtitle).substring(0, 68), {
+                x: margin,
+                y: topY - 24,
+                size: format === 'POCKET' ? 6.5 : 8.5,
+                font: fontRegular,
+                color: palette.darkGray
+              });
+            }
+
+            page.drawLine({
+              start: { x: margin, y: topY - 30 },
+              end: { x: pageW - margin, y: topY - 30 },
+              thickness: 1.2,
+              color: palette.black
+            });
+
+            // Pie de página
+            const bottomY = margin;
+            if (includeNumbering) {
+              page.drawLine({
+                start: { x: margin, y: bottomY + 14 },
+                end: { x: pageW - margin, y: bottomY + 14 },
+                thickness: 0.7,
+                color: palette.midGray
+              });
+              page.drawText(this.cleanWinAnsi(`${this.project.name} | Semilla: ${this.project.config.seed}`), {
+                x: margin,
+                y: bottomY + 3,
+                size: 7,
+                font: fontMono,
+                color: palette.darkGray
+              });
+              const numTxt = `Pag. ${i + 1} / ${pagesToRender.length}`;
+              page.drawText(numTxt, {
+                x: pageW - margin - 52,
+                y: bottomY + 3,
+                size: 7,
+                font: fontMono,
+                color: palette.black
+              });
+            }
+
+            // Área útil de contenido
+            const contentTop = topY - 38;
+            const contentBottom = bottomY + 22;
+            const contentW = pageW - margin * 2;
+            const contentH = contentTop - contentBottom;
+
+            if (pg.type === 'cover') {
+              this.drawPDFCoverPage(page, pg, margin, contentBottom, contentW, contentH, fontBold, fontRegular, fontMono, palette);
+            } else if (pg.type === 'map') {
+              const floor = this.project.floors[pg.floorIndex || 0] || this.project.floors[0];
+              this.drawPDFVectorMapPage(page, floor, margin, contentBottom, contentW, contentH, fontBold, fontRegular, fontMono, palette, colorMode, includeLegend);
+            } else if (pg.type === 'character') {
+              this.drawPDFCharacterPage(page, margin, contentBottom, contentW, contentH, fontBold, fontRegular, fontMono, palette);
+            } else if (pg.type === 'bestiary') {
+              this.drawPDFBestiaryPage(page, margin, contentBottom, contentW, contentH, fontBold, fontRegular, fontMono, palette);
+            } else {
+              this.drawPDFTextAndLinesPage(page, pg, margin, contentBottom, contentW, contentH, fontBold, fontRegular, palette);
+            }
+          }
+
+          const pdfBytes = await pdfDoc.save();
+          const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${this.project.name.replace(/\s+/g, '_')}_${format}.pdf`;
+          a.click();
+          URL.revokeObjectURL(url);
+          this.showToast('Cuaderno PDF vectorial generado y descargado correctamente.');
+        } catch (err) {
+          console.error(err);
+          alert('Error al generar el PDF: ' + err.message);
+        } finally {
+          btn.disabled = false;
+          progress.classList.add('hidden');
+        }
+      },
+
+      drawPDFCoverPage(page, pg, x, y, w, h, fontBold, fontRegular, fontMono, palette) {
+        page.drawRectangle({
+          x, y, width: w, height: h,
+          borderColor: palette.black,
+          borderWidth: 2
+        });
+        page.drawRectangle({
+          x: x + 6, y: y + 6, width: w - 12, height: h - 12,
+          borderColor: palette.black,
+          borderWidth: 0.7
+        });
+
+        const centerY = y + h * 0.62;
+        page.drawText(this.cleanWinAnsi(this.project.name.toUpperCase()).substring(0, 32), {
+          x: x + 20,
+          y: centerY,
+          size: 18,
+          font: fontBold,
+          color: palette.black
+        });
+
+        page.drawText(this.cleanWinAnsi(pg.subtitle || 'Cuaderno de Exploracion Procedural'), {
+          x: x + 20,
+          y: centerY - 22,
+          size: 10,
+          font: fontRegular,
+          color: palette.darkGray
+        });
+
+        // Emblema geométrico vectorial de mazmorra en portada
+        const boxSize = Math.min(w * 0.45, h * 0.28);
+        const bx = x + (w - boxSize) / 2;
+        const by = y + h * 0.25;
+        page.drawRectangle({
+          x: bx, y: by, width: boxSize, height: boxSize,
+          borderColor: palette.black,
+          borderWidth: 1.5,
+          color: palette.lightGray
+        });
+        // Dibujar retícula interna decorativa
+        const steps = 6;
+        const stepSize = boxSize / steps;
+        for (let i = 1; i < steps; i++) {
+          page.drawLine({ start: { x: bx + i * stepSize, y: by }, end: { x: bx + i * stepSize, y: by + boxSize }, thickness: 0.5, color: palette.midGray });
+          page.drawLine({ start: { x: bx, y: by + i * stepSize }, end: { x: bx + boxSize, y: by + i * stepSize }, thickness: 0.5, color: palette.midGray });
+        }
+
+        page.drawText(this.cleanWinAnsi(`SEMILLA: ${this.project.config.seed}`), {
+          x: x + 20,
+          y: y + 28,
+          size: 9,
+          font: fontMono,
+          color: palette.black
+        });
+      },
+
+      drawPDFVectorMapPage(page, floor, x, y, w, h, fontBold, fontRegular, fontMono, palette, colorMode, includeLegend) {
+        const legendH = includeLegend ? Math.min(95, h * 0.24) : 0;
+        const availMapH = h - legendH - 8;
+        const availMapW = w;
+
+        const cellSize = Math.min(availMapW / floor.width, availMapH / floor.height);
+        const mapW = cellSize * floor.width;
+        const mapH = cellSize * floor.height;
+        const mapX = x + (availMapW - mapW) / 2;
+        const mapY = y + legendH + 8 + (availMapH - mapH) / 2;
+
+        // Fondo exterior del mapa
+        page.drawRectangle({
+          x: mapX, y: mapY, width: mapW, height: mapH,
+          borderColor: palette.black,
+          borderWidth: 1.5,
+          color: colorMode === 'bw' ? palette.white : palette.lightGray
+        });
+
+        // 1. Celdas de la cuadrícula
+        for (let gy = 0; gy < floor.height; gy++) {
+          for (let gx = 0; gx < floor.width; gx++) {
+            const tile = floor.grid[gy][gx];
+            const cx = mapX + gx * cellSize;
+            const cy = mapY + (floor.height - 1 - gy) * cellSize;
+
+            if (tile === 0) {
+              if (colorMode === 'bw') {
+                // Sombreado diagonal vectorial para roca en B/N puro
+                page.drawLine({
+                  start: { x: cx, y: cy },
+                  end: { x: cx + cellSize, y: cy + cellSize },
+                  thickness: 0.35,
+                  color: palette.midGray
+                });
+              } else {
+                page.drawRectangle({
+                  x: cx, y: cy, width: cellSize, height: cellSize,
+                  color: palette.lightGray
+                });
+              }
+            } else {
+              page.drawRectangle({
+                x: cx, y: cy, width: cellSize, height: cellSize,
+                color: palette.white,
+                borderColor: palette.midGray,
+                borderWidth: 0.3
+              });
+              // Puerta
+              if (tile === 3 || tile === 4) {
+                page.drawRectangle({
+                  x: cx + cellSize * 0.22,
+                  y: cy + cellSize * 0.22,
+                  width: cellSize * 0.56,
+                  height: cellSize * 0.56,
+                  borderColor: palette.black,
+                  borderWidth: 1
+                });
+              }
+            }
+          }
+        }
+
+        // 2. Paredes perimetrales vectoriales de alto contraste
+        for (let gy = 0; gy < floor.height; gy++) {
+          for (let gx = 0; gx < floor.width; gx++) {
+            if (floor.grid[gy][gx] > 0) {
+              const cx = mapX + gx * cellSize;
+              const cy = mapY + (floor.height - 1 - gy) * cellSize;
+              const wallThick = Math.max(1.1, cellSize * 0.08);
+
+              if (gy === 0 || floor.grid[gy - 1][gx] === 0) {
+                page.drawLine({ start: { x: cx, y: cy + cellSize }, end: { x: cx + cellSize, y: cy + cellSize }, thickness: wallThick, color: palette.black });
+              }
+              if (gy === floor.height - 1 || floor.grid[gy + 1][gx] === 0) {
+                page.drawLine({ start: { x: cx, y: cy }, end: { x: cx + cellSize, y: cy }, thickness: wallThick, color: palette.black });
+              }
+              if (gx === 0 || floor.grid[gy][gx - 1] === 0) {
+                page.drawLine({ start: { x: cx, y: cy }, end: { x: cx, y: cy + cellSize }, thickness: wallThick, color: palette.black });
+              }
+              if (gx === floor.width - 1 || floor.grid[gy][gx + 1] === 0) {
+                page.drawLine({ start: { x: cx + cellSize, y: cy }, end: { x: cx + cellSize, y: cy + cellSize }, thickness: wallThick, color: palette.black });
+              }
+            }
+          }
+        }
+
+        // 3. Entidades vectoriales (Círculos + Código)
+        floor.entities.forEach(ent => {
+          const centerX = mapX + (ent.x + 0.5) * cellSize;
+          const centerY = mapY + (floor.height - 1 - ent.y + 0.5) * cellSize;
+          const radius = cellSize * 0.38;
+
+          page.drawCircle({
+            x: centerX,
+            y: centerY,
+            size: radius,
+            color: palette.white,
+            borderColor: ent.category === 'enemy' ? palette.enemy : palette.black,
+            borderWidth: 1.1
+          });
+
+          const codeStr = this.cleanWinAnsi(ent.code || '?').substring(0, 3);
+          const fontSize = Math.max(4.5, cellSize * 0.32);
+          page.drawText(codeStr, {
+            x: centerX - (codeStr.length * fontSize * 0.3),
+            y: centerY - fontSize * 0.35,
+            size: fontSize,
+            font: fontMono,
+            color: palette.black
+          });
+        });
+
+        // 4. Cajetín inferior de Leyenda y Registro de Planta
+        if (includeLegend && legendH > 30) {
+          page.drawRectangle({
+            x, y, width: w, height: legendH,
+            borderColor: palette.black,
+            borderWidth: 1
+          });
+          page.drawText(this.cleanWinAnsi(`OBJETIVO: ${floor.objective}`).substring(0, 72), {
+            x: x + 8,
+            y: y + legendH - 13,
+            size: 7.5,
+            font: fontBold,
+            color: palette.black
+          });
+
+          const enemiesCount = floor.entities.filter(e => e.category === 'enemy').length;
+          const treasuresCount = floor.entities.filter(e => e.category === 'treasure').length;
+          const trapsCount = floor.entities.filter(e => e.category === 'trap').length;
+
+          page.drawText(
+            this.cleanWinAnsi(`IN: Entrada | OUT: Salida | Enemigos (E1-JB): ${enemiesCount} | Tesoros (T1-T8): ${treasuresCount} | Trampas (X1-X4): ${trapsCount}`),
+            { x: x + 8, y: y + legendH - 26, size: 6.8, font: fontMono, color: palette.darkGray }
+          );
+
+          // Casillas de control de turnos / vida en planta
+          page.drawText('Turnos / Antorcha:', { x: x + 8, y: y + 10, size: 7, font: fontBold, color: palette.black });
+          for (let b = 0; b < 16; b++) {
+            page.drawRectangle({
+              x: x + 85 + b * 12,
+              y: y + 7,
+              width: 9,
+              height: 9,
+              borderColor: palette.black,
+              borderWidth: 0.7
+            });
+          }
+        }
+      },
+
+      drawPDFCharacterPage(page, x, y, w, h, fontBold, fontRegular, fontMono, palette) {
+        const c = this.project.character;
+        page.drawRectangle({ x, y, width: w, height: h, borderColor: palette.black, borderWidth: 1.2 });
+
+        let curY = y + h - 22;
+        const lines = [
+          `NOMBRE DEL HEROE: ${c.name}      CLASE: ${c.className}`,
+          `SALUD MAXIMA (HP): ${c.hp}       ATAQUE (ATK): +${c.atk}       DEFENSA (DEF): ${c.def}`,
+          `VELOCIDAD: 1d6 + ${c.spd}        ORO INICIAL: ${c.gold} monedas`
+        ];
+        lines.forEach(ln => {
+          page.drawText(this.cleanWinAnsi(ln), { x: x + 12, y: curY, size: 9, font: fontMono, color: palette.black });
+          curY -= 18;
+        });
+
+        curY -= 10;
+        page.drawText('REGISTRO DE PUNTOS DE VIDA (Tacha con lapiz):', { x: x + 12, y: curY, size: 8.5, font: fontBold, color: palette.black });
+        curY -= 20;
+        for (let i = 0; i < 20; i++) {
+          page.drawRectangle({ x: x + 12 + i * 16, y: curY, width: 13, height: 13, borderColor: palette.black, borderWidth: 0.8 });
+        }
+
+        curY -= 28;
+        page.drawText('INVENTARIO Y OBJETOS EQUIPADOS:', { x: x + 12, y: curY, size: 8.5, font: fontBold, color: palette.black });
+        curY -= 15;
+        page.drawText(this.cleanWinAnsi(`Equipo base: ${c.items}`).substring(0, 75), { x: x + 12, y: curY, size: 8, font: fontRegular, color: palette.darkGray });
+
+        for (let l = 0; l < 10; l++) {
+          curY -= 22;
+          if (curY < y + 15) break;
+          page.drawLine({ start: { x: x + 12, y: curY }, end: { x: x + w - 12, y: curY }, thickness: 0.5, color: palette.midGray });
+        }
+      },
+
+      drawPDFBestiaryPage(page, x, y, w, h, fontBold, fontRegular, fontMono, palette) {
+        page.drawRectangle({ x, y, width: w, height: h, borderColor: palette.black, borderWidth: 1.2 });
+        let curY = y + h - 20;
+
+        page.drawText('COD   CRIATURA                  NIV   HP    DMG   RECOMPENSA', {
+          x: x + 10, y: curY, size: 8, font: fontMono, color: palette.black
+        });
+        curY -= 6;
+        page.drawLine({ start: { x: x + 8, y: curY }, end: { x: x + w - 8, y: curY }, thickness: 1, color: palette.black });
+
+        this.project.bestiary.forEach(e => {
+          curY -= 18;
+          if (curY < y + 12) return;
+          const row = `${(e.code || '').padEnd(5, ' ')} ${(e.name || '').padEnd(25, ' ').substring(0, 25)} ${String(e.level).padEnd(5, ' ')} ${String(e.hp).padEnd(5, ' ')} ${String(e.dmg).padEnd(5, ' ')} ${e.reward || ''}`;
+          page.drawText(this.cleanWinAnsi(row).substring(0, 76), {
+            x: x + 10, y: curY, size: 7.5, font: fontMono, color: palette.black
+          });
+        });
+      },
+
+      drawPDFTextAndLinesPage(page, pg, x, y, w, h, fontBold, fontRegular, palette) {
+        page.drawRectangle({ x, y, width: w, height: h, borderColor: palette.black, borderWidth: 1.2 });
+        let curY = y + h - 20;
+
+        const rawText = this.cleanWinAnsi(pg.description || this.project.rules.summary || '');
+        const paragraphs = rawText.split('\n');
+
+        paragraphs.forEach(p => {
+          const words = p.split(' ');
+          let line = '';
+          words.forEach(word => {
+            if ((line + word).length > 72) {
+              if (curY > y + 20) {
+                page.drawText(line, { x: x + 12, y: curY, size: 8.5, font: fontRegular, color: palette.black });
+                curY -= 13;
+              }
+              line = word + ' ';
+            } else {
+              line += word + ' ';
+            }
+          });
+          if (line.trim().length > 0 && curY > y + 20) {
+            page.drawText(line.trim(), { x: x + 12, y: curY, size: 8.5, font: fontRegular, color: palette.black });
+            curY -= 16;
+          }
+        });
+
+        // Rellenar el resto de la página con pauta de escritura para el jugador
+        while (curY > y + 22) {
+          curY -= 18;
+          page.drawLine({ start: { x: x + 12, y: curY }, end: { x: x + w - 12, y: curY }, thickness: 0.4, color: palette.midGray });
+        }
+      }
+    };
+
+    window.addEventListener('DOMContentLoaded', () => App.init());
+  </script>
+</body>
+</html>
